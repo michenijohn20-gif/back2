@@ -43,6 +43,18 @@ cd /home/dwayne/back2/server
 npm run dev                     # listens on PORT (default 4000)
 ```
 
+### Supabase / Postgres connection issues
+
+Use a **direct** Postgres URL (Supabase → Project Settings → Database). Append SSL when required:
+
+`postgresql://USER:PASSWORD@HOST:5432/postgres?sslmode=require`
+
+Then run `npx prisma db push` so Prisma creates tables **`Category`**, **`Product`**, etc. (If you only created custom tables in the SQL editor, names must match Prisma’s models or queries will 500.)
+
+**Debug:** open `http://localhost:4000/api/health/db` — if this fails, fix `DATABASE_URL` before the storefront can load categories/products.
+
+After pulling the latest server code, failed API routes return JSON with Prisma **`code`** / **`meta`** in development to speed up debugging.
+
 Expose a public HTTPS URL when testing STK callbacks; set:
 
 - `MPESA_CALLBACK_URL` → `POST` target at `/api/payments/mpesa/callback`

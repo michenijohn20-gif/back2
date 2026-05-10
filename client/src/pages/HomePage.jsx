@@ -54,15 +54,35 @@ export function HomePage() {
   const [cats, setCats] = useState([]);
 
   useEffect(() => {
-    Promise.all([
-      api.get("/api/products", { params: { featured: "true", pageSize: 8, sort: "featured" } }),
-      api.get("/api/categories"),
-    ])
-      .then(([fp, cg]) => {
-        setFeatured(fp.data.products || []);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [fp, cg] = await Promise.all([
+          api.get("/api/products", { params: { featured: "true", pageSize: 8, sort: "featured" } }),
+          api.get("/api/categories"),
+        ]);
+        if (cancelled) return;
+        let products = fp.data?.products || [];
+        if (products.length === 0) {
+          const fb = await api.get("/api/products", { params: { pageSize: 8, sort: "newest" } });
+          if (!cancelled) products = fb.data?.products || [];
+        }
+        setFeatured(products);
         setCats(cg.data || []);
-      })
-      .finally(() => setLoading(false));
+      } catch (e) {
+        if (import.meta.env.DEV) console.warn("[HomePage] products/categories fetch failed", e);
+        if (!cancelled) {
+          setFeatured([]);
+          setCats([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -88,6 +108,13 @@ export function HomePage() {
             <p className="text-sm text-muted uppercase tracking-wide mb-3">Featured right now</p>
             {!loading && featured[0] ? (
               <ProductCard product={featured[0]} dense />
+            ) : !loading ? (
+              <div className="h-72 flex flex-col items-center justify-center gap-2 text-muted text-sm px-4 text-center">
+                <p>No catalogue items yet, or the API is not reachable.</p>
+                <Link to="/products" className="text-primary font-medium hover:underline">
+                  Open all products
+                </Link>
+              </div>
             ) : (
               <div className="h-72 flex items-center justify-center text-muted">Loading…</div>
             )}

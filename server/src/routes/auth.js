@@ -7,6 +7,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/
 import { isValidKenyaPhone } from "../utils/phone.js";
 import { optionalAuth } from "../middleware/auth.js";
 import { sendMailSafe } from "../services/email.js";
+import { asyncHandler } from "../util/asyncHandler.js";
 
 const router = Router();
 
@@ -171,13 +172,17 @@ router.post("/reset-password", async (req, res) => {
   res.json({ ok: true });
 });
 
-router.get("/me", optionalAuth, async (req, res) => {
-  if (!req.userId) return res.json({ user: null });
-  const user = await prisma.user.findUnique({
-    where: { id: req.userId },
-    select: { id: true, email: true, fullName: true, phone: true, avatarUrl: true },
-  });
-  res.json({ user });
-});
+router.get(
+  "/me",
+  optionalAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.userId) return res.json({ user: null });
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, email: true, fullName: true, phone: true, avatarUrl: true },
+    });
+    res.json({ user });
+  }),
+);
 
 export default router;

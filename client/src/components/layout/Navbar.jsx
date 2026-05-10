@@ -1,9 +1,20 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import api from "../../lib/api";
 import { useCartStore } from "../../store/cartStore";
 import { useAuthStore } from "../../store/authStore";
 import { BtnLink } from "../ui.jsx";
+
+/** Shown when API is down or DB not seeded — slugs match `prisma/seed.js` */
+const FALLBACK_CATEGORIES = [
+  { id: "fb-smartphones", name: "Smartphones", slug: "smartphones" },
+  { id: "fb-laptops", name: "Laptops", slug: "laptops" },
+  { id: "fb-tablets", name: "Tablets", slug: "tablets" },
+  { id: "fb-audio", name: "Audio", slug: "audio" },
+  { id: "fb-gaming", name: "Gaming", slug: "gaming" },
+  { id: "fb-cameras", name: "Cameras", slug: "cameras" },
+  { id: "fb-accessories", name: "Accessories", slug: "accessories" },
+];
 
 function MenuIcon() {
   return (
@@ -28,6 +39,11 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const activeCategorySlug =
+    location.pathname === "/products"
+      ? new URLSearchParams(location.search).get("categories")?.split(",")[0] ?? null
+      : null;
   const count = useCartStore((s) => s.count());
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -35,9 +51,14 @@ export function Navbar() {
   useEffect(() => {
     api
       .get("/api/categories")
-      .then((r) => setCategories(r.data))
-      .catch(() => {});
+      .then((r) => {
+        const list = Array.isArray(r.data) ? r.data : [];
+        setCategories(list.length ? list : FALLBACK_CATEGORIES);
+      })
+      .catch(() => setCategories(FALLBACK_CATEGORIES));
   }, []);
+
+  const navCategories = categories.length ? categories : FALLBACK_CATEGORIES;
 
   const onSearch = (e) => {
     e.preventDefault();
@@ -63,21 +84,7 @@ export function Navbar() {
             Refurb<span className="text-primary">KE</span>
           </Link>
 
-          <nav className="hidden md:flex flex-1 justify-center gap-4 text-sm text-body">
-            {categories.slice(0, 7).map((c) => (
-              <NavLink
-                key={c.id}
-                to={`/products?categories=${c.slug}`}
-                className={({ isActive }) =>
-                  `hover:text-primary whitespace-nowrap ${isActive ? "text-primary font-semibold" : ""}`
-                }
-              >
-                {c.name}
-              </NavLink>
-            ))}
-          </nav>
-
-          <form onSubmit={onSearch} className="flex-1 md:flex-initial md:w-64">
+          <form onSubmit={onSearch} className="flex-1 min-w-0 md:flex-initial md:w-64 md:max-w-xs">
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -118,10 +125,43 @@ export function Navbar() {
         </div>
       </div>
 
+      <div className="border-t border-border bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <nav
+            className="flex gap-1 sm:gap-3 overflow-x-auto py-2.5 text-sm text-body [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Product categories"
+          >
+            {navCategories.map((c) => (
+              <NavLink
+                key={c.id}
+                to={`/products?categories=${c.slug}`}
+                className={() =>
+                  `shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 hover:bg-surface hover:text-primary ${
+                    activeCategorySlug === c.slug ? "bg-[#EFF6FF] text-primary font-semibold" : ""
+                  }`
+                }
+              >
+                {c.name}
+              </NavLink>
+            ))}
+            <Link
+              to="/products"
+              className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 hover:bg-surface hover:text-primary ${
+                location.pathname === "/products" && !activeCategorySlug
+                  ? "bg-[#EFF6FF] text-primary font-semibold"
+                  : "text-muted"
+              }`}
+            >
+              All products
+            </Link>
+          </nav>
+        </div>
+      </div>
+
       {open && (
         <div className="md:hidden border-t border-border bg-white px-4 pb-4">
           <div className="flex flex-col gap-2 py-2">
-            {categories.map((c) => (
+            {navCategories.map((c) => (
               <Link
                 key={c.id}
                 to={`/products?categories=${c.slug}`}

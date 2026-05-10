@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import { prisma } from "./prisma.js";
 
 import publicRouter from "./routes/public.js";
 import categoriesRouter from "./routes/categories.js";
@@ -29,6 +30,33 @@ export function createApp() {
 
   app.get("/api/health", (_req, res) => res.json({ ok: true, name: "RefurbKE API" }));
 
+  /** Confirms Prisma can reach Postgres (Supabase). Use when /api/categories returns 500. */
+  app.get("/api/health/db", async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ok: true, database: "reachable" });
+    } catch (e) {
+      console.error("[health/db]", e);
+      res.status(503).json({
+        ok: false,
+        database: "error",
+        message: e.message || "Database unreachable",
+        hint:
+          "Check DATABASE_URL (Supabase often needs ?sslmode=require). Run: npx prisma db push",
+      });
+    }
+  });
+
+  app.get("/", (_req, res) => {
+    const storefront = process.env.CLIENT_URL?.split(",")[0]?.trim() || "http://localhost:5173";
+    res.json({
+      name: "RefurbKE API",
+      message: "Backend is running. There is no HTML homepage on this port.",
+      storefront,
+      try: ["/api/health", "/api/health/db", "/api/categories"],
+    });
+  });
+
   app.use("/api", publicRouter);
   app.use("/api/categories", categoriesRouter);
   app.use("/api/brands", brandsRouter);
@@ -47,7 +75,13 @@ export function createApp() {
   // eslint-disable-next-line no-unused-vars
   app.use((err, _req, res, _next) => {
     console.error(err);
-    res.status(500).json({ error: err.message || "Server error" });
+    const dev = process.env.NODE_ENV !== "production";
+    const body = {
+      error: err.message || "Server error",
+      ...(dev && err.code ? { code: err.code } : {}),
+      ...(dev && err.meta ? { meta: err.meta } : {}),
+    };
+    res.status(500).json(body);
   });
 
   return app;
