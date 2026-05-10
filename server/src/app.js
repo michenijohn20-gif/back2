@@ -48,12 +48,15 @@ export function createApp() {
   });
 
   app.get("/", (_req, res) => {
-    const storefront = process.env.CLIENT_URL?.split(",")[0]?.trim() || "http://localhost:5173";
+    const storefronts = process.env.CLIENT_URL
+      ? process.env.CLIENT_URL.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
     res.json({
       name: "RefurbKE API",
-      message: "Backend is running. There is no HTML homepage on this port.",
-      storefront,
-      try: ["/api/health", "/api/health/db", "/api/categories"],
+      message:
+        "This URL is the JSON API only. Open your Netlify (or other) frontend in the browser to shop — not this Railway host.",
+      storefronts: storefronts.length ? storefronts : ["(set CLIENT_URL on Railway to your Netlify URL, e.g. https://yoursite.netlify.app)"],
+      api: ["/api/health", "/api/health/db", "/api/categories"],
     });
   });
 

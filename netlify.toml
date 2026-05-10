@@ -4,13 +4,14 @@
 #   VITE_API_URL = https://your-api-host.example.com
 # No trailing slash. Rebuild after changing env vars.
 #
-# Netlify UI → Build settings (if you don’t use this file):
-#   Build command: cd client && npm install && npm run build
-#   Publish directory: client/dist
+# Netlify UI → Build settings:
+#   Base directory: client
+#   Build command: npm install && npm run build
+#   Publish directory: dist
 
 [build]
-  command = "cd client && npm install && npm run build"
-  publish = "client/dist"
+  command = "npm install && npm run build"
+  publish = "dist"
 
 [[redirects]]
   from = "/*"
