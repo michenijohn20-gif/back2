@@ -6,7 +6,7 @@ import {
   mapStkQueryToPaid,
 } from "../services/mpesa.js";
 import { formattedForMpesa, isValidKenyaPhone } from "../utils/phone.js";
-import { markOrderPaid } from "./orders.js";
+import { markOrderFailed, markOrderPaid } from "./orders.js";
 import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import axios from "axios";
 
@@ -21,7 +21,7 @@ router.post("/mpesa/stk-push", async (req, res) => {
   if (!order || order.paymentMethod !== PaymentMethod.MPESA) {
     return res.status(400).json({ error: "Invalid order for M-Pesa" });
   }
-  if (order.paymentStatus !== PaymentStatus.PENDING) {
+  if (![PaymentStatus.PENDING, PaymentStatus.FAILED].includes(order.paymentStatus)) {
     return res.status(400).json({ error: "Order payment already finalized" });
   }
 
@@ -39,7 +39,10 @@ router.post("/mpesa/stk-push", async (req, res) => {
 
     await prisma.order.update({
       where: { id: order.id },
-      data: { mpesaCheckoutId: checkoutId || merchantReq || null },
+      data: {
+        mpesaCheckoutId: checkoutId || merchantReq || null,
+        paymentStatus: PaymentStatus.PENDING,
+      },
     });
 
     const code = resp?.ResponseCode ?? resp?.responseCode;
@@ -73,6 +76,13 @@ router.get("/mpesa/status/:orderNumber", async (req, res) => {
   if (ord.paymentStatus === PaymentStatus.PAID) {
     return res.json({ status: "paid", orderNumber: ord.orderNumber, orderId: ord.id });
   }
+  if (ord.paymentStatus === PaymentStatus.FAILED) {
+    return res.json({
+      status: "failed",
+      orderNumber: ord.orderNumber,
+      detail: "M-Pesa payment was not completed.",
+    });
+  }
 
   const checkoutReqId = ord.mpesaCheckoutId;
   if (!checkoutReqId) {
@@ -96,6 +106,16 @@ router.get("/mpesa/status/:orderNumber", async (req, res) => {
     }
 
     const desc = q?.ResultDesc || q?.ResultDescription || "";
+    const resultCode = q?.ResultCode ?? q?.resultCode;
+    if (resultCode !== undefined && String(resultCode) !== "0") {
+      await markOrderFailed(ord.id);
+      return res.json({
+        status: "failed",
+        daraja: desc || "M-Pesa payment was not completed.",
+        orderNumber: ord.orderNumber,
+      });
+    }
+
     return res.json({ status: "pending", daraja: desc, orderNumber: ord.orderNumber });
   } catch (e) {
     console.error(e.response?.data || e.message);
@@ -120,11 +140,18 @@ router.post("/mpesa/callback", async (req, res) => {
       const rec = meta.find((i) => i.Name === "MpesaReceiptNumber");
       receipt = rec?.Value;
     }
-    if (!checkoutReq || resultCode === undefined || Number(resultCode) !== 0) return;
+    if (!checkoutReq || resultCode === undefined) return;
 
     const order = await prisma.order.findFirst({
       where: { mpesaCheckoutId: checkoutReq },
     });
+    if (!order) return;
+
+    if (Number(resultCode) !== 0) {
+      await markOrderFailed(order.id);
+      return;
+    }
+
     if (order) {
       await markOrderPaid(order.id, { mpesaReceipt: receipt || checkoutReq });
     }

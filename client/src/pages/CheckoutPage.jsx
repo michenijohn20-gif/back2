@@ -34,6 +34,7 @@ export function CheckoutPage() {
   const [pesapalUrl, setPesapalUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [pollHint, setPollHint] = useState("");
+  const [paymentState, setPaymentState] = useState("idle");
 
   useEffect(() => {
     if (accessToken) setAuthToken(accessToken);
@@ -78,12 +79,23 @@ export function CheckoutPage() {
         return;
       }
       try {
-        const r = await api.get(`/api/orders/status/${order.orderNumber}`);
-        if (r.data.paymentStatus === "PAID") {
+        const r =
+          form.paymentMethod === "MPESA"
+            ? await api.get(`/api/payments/mpesa/status/${order.orderNumber}`)
+            : await api.get(`/api/orders/status/${order.orderNumber}`);
+        const status = r.data.status || r.data.paymentStatus;
+        if (status === "paid" || status === "PAID") {
           stopped = true;
           clearInterval(id);
+          setPaymentState("paid");
           clearCart();
           setStep(3);
+        }
+        if (status === "failed" || status === "FAILED") {
+          stopped = true;
+          clearInterval(id);
+          setPaymentState("failed");
+          setPollHint(r.data.daraja || r.data.detail || "M-Pesa payment failed. Please try again.");
         }
       } catch {
         /* ignore transient errors */
@@ -93,7 +105,7 @@ export function CheckoutPage() {
       stopped = true;
       clearInterval(id);
     };
-  }, [order, step, clearCart]);
+  }, [order, step, form.paymentMethod, clearCart]);
 
   const validateStep1 = () => {
     const e = {};
@@ -107,6 +119,7 @@ export function CheckoutPage() {
   };
 
   const startMpesa = async (ord, phone) => {
+    setPaymentState("pending");
     setPollHint("Check your phone for an M-Pesa prompt…");
     try {
       await api.post("/api/payments/mpesa/stk-push", {
@@ -114,11 +127,13 @@ export function CheckoutPage() {
         phone,
       });
     } catch (e) {
+      setPaymentState("failed");
       setPollHint(e.response?.data?.error || "STK push failed — verify Daraja sandbox keys.");
     }
   };
 
   const startPesapal = async (ord) => {
+    setPaymentState("pending");
     try {
       const r = await api.post("/api/payments/pesapal/create", { orderId: ord.id });
       if (r.data?.iframeUrl) {
@@ -167,6 +182,7 @@ export function CheckoutPage() {
       const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
       const r = await api.post("/api/orders", payload, { headers });
       setOrder(r.data);
+      setPaymentState("pending");
       if (form.paymentMethod === "MPESA") {
         await startMpesa(r.data, mpesaPhone || form.phone);
       } else {
@@ -334,8 +350,20 @@ export function CheckoutPage() {
                 confirmation.
               </p>
               {pollHint && (
-                <div className="flex items-start gap-3 text-sm text-body border border-dashed border-border rounded p-3 bg-surface">
-                  <span className="mt-0.5 inline-block h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                <div
+                  className={`flex items-start gap-3 text-sm border rounded p-3 ${
+                    paymentState === "failed"
+                      ? "text-red-700 border-red-200 bg-red-50"
+                      : "text-body border-dashed border-border bg-surface"
+                  }`}
+                >
+                  {paymentState === "failed" ? (
+                    <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-red-500 text-[10px] font-semibold shrink-0">
+                      !
+                    </span>
+                  ) : (
+                    <span className="mt-0.5 inline-block h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+                  )}
                   <span>{pollHint}</span>
                 </div>
               )}
@@ -343,24 +371,33 @@ export function CheckoutPage() {
                 <iframe title="Pesapal" src={pesapalUrl} className="w-full h-[620px] border border-border rounded" />
               )}
               <div className="flex gap-3 flex-wrap">
-                <Btn
-                  variant="secondary"
-                  onClick={async () => {
-                    try {
-                      const r = await api.get(`/api/orders/status/${order.orderNumber}`);
-                      if (r.data.paymentStatus === "PAID") {
-                        clearCart();
-                        setStep(3);
-                      } else {
-                        window.alert("Payment not confirmed yet — finish in Pesapal or wait a few seconds.");
+                {form.paymentMethod === "MPESA" && paymentState === "failed" ? (
+                  <Btn variant="secondary" disabled={busy} onClick={() => startMpesa(order, mpesaPhone || form.phone)}>
+                    Try M-Pesa again
+                  </Btn>
+                ) : (
+                  <Btn
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        const r = await api.get(`/api/orders/status/${order.orderNumber}`);
+                        if (r.data.paymentStatus === "PAID") {
+                          clearCart();
+                          setStep(3);
+                        } else if (r.data.paymentStatus === "FAILED") {
+                          setPaymentState("failed");
+                          setPollHint("Payment failed. Please try again.");
+                        } else {
+                          window.alert("Payment not confirmed yet — finish payment or wait a few seconds.");
+                        }
+                      } catch {
+                        window.alert("Could not verify payment yet.");
                       }
-                    } catch {
-                      window.alert("Could not verify payment yet.");
-                    }
-                  }}
-                >
-                  I have completed my card payment
-                </Btn>
+                    }}
+                  >
+                    I have completed my card payment
+                  </Btn>
+                )}
                 <button type="button" className="text-sm text-muted underline" onClick={() => navigate("/account")}>
                   View orders
                 </button>

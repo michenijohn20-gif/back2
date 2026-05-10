@@ -164,6 +164,13 @@ export async function markOrderPaid(orderId, extra = {}) {
   return fresh;
 }
 
+export async function markOrderFailed(orderId) {
+  return prisma.order.update({
+    where: { id: orderId },
+    data: { paymentStatus: PaymentStatus.FAILED },
+  });
+}
+
 export default router;
 
-// markOrderPaid exported for payments route
+// markOrderPaid and markOrderFailed exported for payments route
