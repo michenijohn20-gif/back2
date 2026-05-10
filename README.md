@@ -97,9 +97,24 @@ npm run dev                    # opens http://localhost:5173
 Optional overrides:
 
 ```
-VITE_API_URL=http://localhost:4000
+# Local: omit VITE_API_URL to use the Vite dev proxy.
+# Production: set to your public API origin (see “Netlify” below).
+VITE_API_URL=https://your-api.example.com
 VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com   # mirrors server GOOGLE_CLIENT_ID
 ```
+
+## Netlify (frontend only)
+
+**Full Railway API guide:** [docs/deploy-railway.md](docs/deploy-railway.md)
+
+Netlify serves **static files** from `client/dist`. It does **not** run your Express + Prisma server, so the catalogue will stay empty until the browser can reach a live API.
+
+1. **Deploy the API** somewhere that runs Node 18+ long-lived (e.g. [Render](https://render.com), [Railway](https://railway.app), [Fly.io](https://fly.io), a VPS). Set `DATABASE_URL` (Supabase), `JWT_SECRET`, `CLIENT_URL`, etc., on that host. Start command: `node server/src/index.js` or `npm start` from `/server` after `npx prisma generate` and `prisma migrate deploy` / `db push`.
+2. **CORS:** In the API `.env`, set `CLIENT_URL` to your Netlify site, e.g. `https://refurbke.netlify.app` (comma-separate if you have preview URLs too).
+3. **Netlify environment variables:** Add `VITE_API_URL` = `https://your-api-host.example.com` (**no trailing slash**). Redeploy so Vite bakes it into the bundle.
+4. **Build:** Repo includes `netlify.toml` (`cd client && npm install && npm run build`, publish `client/dist`). Or set the same in the Netlify UI.
+
+Smoke-test the API from your machine: `curl https://your-api-host.example.com/api/categories`
 
 ## 4. Admin workspace
 

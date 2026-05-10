@@ -1,0 +1,18 @@
+# Netlify hosts only the Vite frontend. The Express API must run elsewhere (Render, Railway, Fly.io, VPS, etc.).
+#
+# Netlify UI → Site settings → Environment variables (build + runtime for Vite):
+#   VITE_API_URL = https://your-api-host.example.com
+# No trailing slash. Rebuild after changing env vars.
+#
+# Netlify UI → Build settings (if you don’t use this file):
+#   Build command: cd client && npm install && npm run build
+#   Publish directory: client/dist
+
+[build]
+  command = "cd client && npm install && npm run build"
+  publish = "client/dist"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

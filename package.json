@@ -1,0 +1,12 @@
+{
+  "name": "refurbke",
+  "private": true,
+  "description": "Monorepo anchor for Railway: API lives in /server. Netlify builds /client separately.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "cd server && npm install && npx prisma generate",
+    "start": "cd server && npm start"
+  }
+}
