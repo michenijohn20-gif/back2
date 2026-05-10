@@ -11,6 +11,7 @@ import { OrderFulfillmentStatus, PaymentMethod, PaymentStatus } from "@prisma/cl
 import axios from "axios";
 
 const router = Router();
+const mpesaStatusTimeoutMs = Number(process.env.MPESA_STATUS_TIMEOUT_MS || 150_000);
 
 const paystackBaseUrl = "https://api.paystack.co";
 
@@ -74,6 +75,26 @@ async function syncPaystackOrder(order, reference) {
   return { kind, tx };
 }
 
+function getDarajaResultCode(resp) {
+  return resp?.ResultCode ?? resp?.resultCode ?? resp?.errorCode ?? resp?.error_code;
+}
+
+function getDarajaResultDesc(resp) {
+  return (
+    resp?.ResultDesc ||
+    resp?.resultDesc ||
+    resp?.ResultDescription ||
+    resp?.errorMessage ||
+    resp?.error_message ||
+    resp?.CustomerMessage ||
+    ""
+  );
+}
+
+function isMpesaStatusTimedOut(order) {
+  return Date.now() - new Date(order.updatedAt || order.createdAt).getTime() > mpesaStatusTimeoutMs;
+}
+
 router.post("/mpesa/stk-push", async (req, res) => {
   const { orderId, phone } = req.body || {};
   if (!orderId || !phone) return res.status(400).json({ error: "orderId and phone required" });
@@ -101,8 +122,8 @@ router.post("/mpesa/stk-push", async (req, res) => {
       transactionDesc: `RK`,
     });
 
-    const checkoutId = resp?.CheckoutRequestID;
-    const merchantReq = resp?.MerchantRequestID;
+    const checkoutId = resp?.CheckoutRequestID || resp?.checkoutRequestID || resp?.checkoutRequestId;
+    const merchantReq = resp?.MerchantRequestID || resp?.merchantRequestID || resp?.merchantRequestId;
 
     await prisma.order.update({
       where: { id: order.id },
@@ -175,8 +196,8 @@ router.get("/mpesa/status/:orderNumber", async (req, res) => {
       });
     }
 
-    const desc = q?.ResultDesc || q?.ResultDescription || "";
-    const resultCode = q?.ResultCode ?? q?.resultCode;
+    const desc = getDarajaResultDesc(q);
+    const resultCode = getDarajaResultCode(q);
     if (resultCode !== undefined && String(resultCode) !== "0") {
       const failedOrder = await markOrderFailed(ord.id, {
         checkoutId: checkoutReqId,
@@ -194,10 +215,44 @@ router.get("/mpesa/status/:orderNumber", async (req, res) => {
 
     return res.json({ status: "pending", daraja: desc, orderNumber: ord.orderNumber });
   } catch (e) {
-    console.error(e.response?.data || e.message);
+    const daraja = e.response?.data;
+    console.error(daraja || e.message);
+    const resultCode = getDarajaResultCode(daraja);
+    const desc = getDarajaResultDesc(daraja) || e.message;
+
+    if (resultCode !== undefined && String(resultCode) !== "0") {
+      const failedOrder = await markOrderFailed(ord.id, {
+        checkoutId: checkoutReqId,
+        detail: desc || "M-Pesa payment was not completed.",
+      });
+      const cancelled = failedOrder?.fulfillmentStatus === OrderFulfillmentStatus.CANCELLED;
+      return res.json({
+        status: cancelled ? "cancelled" : "failed",
+        daraja: cancelled
+          ? "Order cancelled after failed M-Pesa attempts. Please create a new order."
+          : desc || "M-Pesa payment was not completed.",
+        orderNumber: ord.orderNumber,
+      });
+    }
+
+    if (isMpesaStatusTimedOut(ord)) {
+      const failedOrder = await markOrderFailed(ord.id, {
+        checkoutId: checkoutReqId,
+        detail: "M-Pesa prompt timed out before payment was confirmed.",
+      });
+      const cancelled = failedOrder?.fulfillmentStatus === OrderFulfillmentStatus.CANCELLED;
+      return res.json({
+        status: cancelled ? "cancelled" : "failed",
+        daraja: cancelled
+          ? "Order cancelled after failed M-Pesa attempts. Please create a new order."
+          : "M-Pesa prompt timed out before payment was confirmed.",
+        orderNumber: ord.orderNumber,
+      });
+    }
+
     return res.json({
       status: "pending",
-      detail: e.message,
+      detail: desc,
       orderNumber: ord.orderNumber,
     });
   }

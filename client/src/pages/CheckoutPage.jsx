@@ -117,9 +117,10 @@ export function CheckoutPage() {
     const id = setInterval(async () => {
       if (stopped) return;
       attempts += 1;
-      if (attempts > 24) {
+      if (attempts > 36) {
         clearInterval(id);
-        setPollHint("Still awaiting confirmation — keep this tab open or check your SMS receipts.");
+        setPaymentState("failed");
+        setPollHint("Payment was not confirmed. Please try again or check your order later.");
         return;
       }
       try {
@@ -438,7 +439,7 @@ export function CheckoutPage() {
                         const r =
                           form.paymentMethod === "CARD"
                             ? await api.get(`/api/payments/paystack/status/${order.orderNumber}`)
-                            : await api.get(`/api/orders/status/${order.orderNumber}`);
+                            : await api.get(`/api/payments/mpesa/status/${order.orderNumber}`);
                         const status = r.data.status || r.data.paymentStatus;
                         if (status === "paid" || status === "PAID") {
                           clearCart();

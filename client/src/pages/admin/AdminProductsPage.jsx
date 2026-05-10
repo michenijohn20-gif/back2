@@ -5,7 +5,12 @@ import { Btn } from "../../components/ui.jsx";
 
 export function AdminProductsPage() {
   const [products, setProducts] = useState([]);
-  const load = () => adminApi.get("/api/admin/products").then((r) => setProducts(r.data));
+  const [meta, setMeta] = useState({ total: 0, page: 1, pageSize: 50 });
+  const load = (page = meta.page) =>
+    adminApi.get("/api/admin/products", { params: { page, pageSize: meta.pageSize } }).then((r) => {
+      setProducts(r.data.products || []);
+      setMeta({ total: r.data.total || 0, page: r.data.page || page, pageSize: r.data.pageSize || meta.pageSize });
+    });
 
   useEffect(() => {
     load();
@@ -70,6 +75,23 @@ export function AdminProductsPage() {
           </tbody>
         </table>
       </div>
+      {meta.total > meta.pageSize && (
+        <div className="flex items-center justify-end gap-3 text-sm">
+          <span className="text-muted">
+            Page {meta.page} of {Math.max(1, Math.ceil(meta.total / meta.pageSize))}
+          </span>
+          <Btn variant="secondary" disabled={meta.page <= 1} onClick={() => load(meta.page - 1)}>
+            Previous
+          </Btn>
+          <Btn
+            variant="secondary"
+            disabled={meta.page >= Math.ceil(meta.total / meta.pageSize)}
+            onClick={() => load(meta.page + 1)}
+          >
+            Next
+          </Btn>
+        </div>
+      )}
     </div>
   );
 }

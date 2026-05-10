@@ -104,6 +104,8 @@ model Product {
   @@index([categoryId])
   @@index([brandId])
   @@index([slug])
+  @@index([featured, createdAt])
+  @@index([createdAt])
 }
 
 model ProductImage {
@@ -131,6 +133,9 @@ model ProductVariant {
   orderItems     OrderItem[]
 
   @@index([productId])
+  @@index([productId, priceExcellent])
+  @@index([productId, priceGood])
+  @@index([productId, priceFair])
 }
 
 model Address {
@@ -208,6 +213,9 @@ model Order {
   items             OrderItem[]
   @@index([userId])
   @@index([orderNumber])
+  @@index([createdAt])
+  @@index([paymentStatus, fulfillmentStatus])
+  @@index([fulfillmentStatus, createdAt])
 }
 
 model OrderItem {

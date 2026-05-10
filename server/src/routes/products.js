@@ -4,6 +4,31 @@ import { asyncHandler } from "../util/asyncHandler.js";
 
 const router = Router();
 
+const productCardSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  featured: true,
+  createdAt: true,
+  updatedAt: true,
+  brand: { select: { id: true, name: true, slug: true } },
+  category: { select: { id: true, name: true, slug: true } },
+  images: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true, url: true, sortOrder: true } },
+  variants: {
+    select: {
+      id: true,
+      storage: true,
+      color: true,
+      priceExcellent: true,
+      priceGood: true,
+      priceFair: true,
+      stockExcellent: true,
+      stockGood: true,
+      stockFair: true,
+    },
+  },
+};
+
 function buildVariantAnd(conditionRaw, priceMin, priceMax, inStockRaw, storage, color) {
   const condition = String(conditionRaw || "EXCELLENT").toUpperCase();
   const priceKey =
@@ -109,12 +134,7 @@ router.get("/", asyncHandler(async (req, res) => {
       skip,
       take,
       orderBy,
-      include: {
-        brand: true,
-        category: true,
-        images: { orderBy: { sortOrder: "asc" }, take: 1 },
-        variants: true,
-      },
+      select: productCardSelect,
     }),
   ]);
 
@@ -176,11 +196,7 @@ router.get(
     const related = await prisma.product.findMany({
       where: { categoryId: product.categoryId, id: { not: product.id } },
       take: 4,
-      include: {
-        brand: true,
-        images: { orderBy: { sortOrder: "asc" }, take: 1 },
-        variants: true,
-      },
+      select: productCardSelect,
     });
 
     res.json({ product, related });

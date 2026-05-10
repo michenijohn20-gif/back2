@@ -100,8 +100,17 @@ router.get("/orders", async (req, res) => {
       skip,
       take,
       orderBy: { createdAt: "desc" },
-      include: {
-        items: true,
+      select: {
+        id: true,
+        orderNumber: true,
+        guestName: true,
+        guestEmail: true,
+        guestPhone: true,
+        totalAmount: true,
+        paymentStatus: true,
+        fulfillmentStatus: true,
+        createdAt: true,
+        items: { select: { quantity: true } },
         user: { select: { fullName: true, email: true, phone: true } },
       },
     }),
@@ -112,7 +121,10 @@ router.get("/orders", async (req, res) => {
 router.get("/orders/:id", async (req, res) => {
   const order = await prisma.order.findUnique({
     where: { id: req.params.id },
-    include: { items: true, user: true },
+    include: {
+      items: true,
+      user: { select: { id: true, email: true, fullName: true, phone: true } },
+    },
   });
   if (!order) return res.status(404).json({ error: "Not found" });
   res.json(order);
@@ -129,16 +141,36 @@ router.patch("/orders/:id", async (req, res) => {
 });
 
 router.get("/products", async (req, res) => {
-  const list = await prisma.product.findMany({
-    orderBy: { updatedAt: "desc" },
-    include: {
-      brand: true,
-      category: true,
-      images: { orderBy: { sortOrder: "asc" }, take: 1 },
-      variants: true,
-    },
-  });
-  res.json(list);
+  const { page = "1", pageSize = "50" } = req.query;
+  const take = Math.min(100, Math.max(1, Number(pageSize) || 50));
+  const skip = (Math.max(1, Number(page) || 1) - 1) * take;
+  const [total, products] = await prisma.$transaction([
+    prisma.product.count(),
+    prisma.product.findMany({
+      skip,
+      take,
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        updatedAt: true,
+        brand: { select: { id: true, name: true } },
+        category: { select: { id: true, name: true } },
+        images: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true, url: true } },
+        variants: {
+          select: {
+            id: true,
+            priceExcellent: true,
+            stockExcellent: true,
+            stockGood: true,
+            stockFair: true,
+          },
+        },
+      },
+    }),
+  ]);
+  res.json({ total, products, page: Number(page), pageSize: take });
 });
 
 router.post("/products", async (req, res) => {

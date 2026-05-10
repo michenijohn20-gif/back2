@@ -51,21 +51,31 @@ export function AccountPage() {
     if (user) setProfile({ fullName: user.fullName, email: user.email, phone: user.phone || "" });
   }, [user, accessToken]);
 
-  const load = async () => {
+  const loadOrders = async () => {
     if (!accessToken) return;
     const headers = { Authorization: `Bearer ${accessToken}` };
-    const [o, w, a] = await Promise.all([
-      api.get("/api/account/orders", { headers }),
-      api.get("/api/wishlist", { headers }),
-      api.get("/api/addresses", { headers }),
-    ]);
+    const o = await api.get("/api/account/orders", { headers });
     setOrders(o.data);
+  };
+
+  const loadWishlist = async () => {
+    if (!accessToken) return;
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    const w = await api.get("/api/wishlist", { headers });
     setWishlist(w.data);
+  };
+
+  const loadAddresses = async () => {
+    if (!accessToken) return;
+    const headers = { Authorization: `Bearer ${accessToken}` };
+    const a = await api.get("/api/addresses", { headers });
     setAddresses(a.data);
   };
 
   useEffect(() => {
-    load();
+    if (tab === "orders") loadOrders();
+    if (tab === "wishlist") loadWishlist();
+    if (tab === "addresses") loadAddresses();
   }, [accessToken, tab]);
 
   if (!accessToken) {
@@ -120,7 +130,7 @@ export function AccountPage() {
         street: "",
         isDefault: false,
       });
-      load();
+      loadAddresses();
     } catch {
       window.alert("Could not save address.");
     }
@@ -218,7 +228,7 @@ export function AccountPage() {
                         await api.delete(`/api/wishlist/${p.id}`, {
                           headers: { Authorization: `Bearer ${accessToken}` },
                         });
-                        load();
+                        loadWishlist();
                       }}
                     >
                       Remove

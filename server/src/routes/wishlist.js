@@ -10,11 +10,26 @@ router.get("/", async (req, res) => {
     where: { userId: req.user.id },
     include: {
       product: {
-        include: {
-          brand: true,
-          category: true,
-          images: { orderBy: { sortOrder: "asc" }, take: 1 },
-          variants: true,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          brand: { select: { id: true, name: true, slug: true } },
+          category: { select: { id: true, name: true, slug: true } },
+          images: { orderBy: { sortOrder: "asc" }, take: 1, select: { id: true, url: true, sortOrder: true } },
+          variants: {
+            select: {
+              id: true,
+              storage: true,
+              color: true,
+              priceExcellent: true,
+              priceGood: true,
+              priceFair: true,
+              stockExcellent: true,
+              stockGood: true,
+              stockFair: true,
+            },
+          },
         },
       },
     },
