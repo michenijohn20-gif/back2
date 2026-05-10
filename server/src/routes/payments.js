@@ -146,13 +146,19 @@ router.post("/mpesa/stk-push", async (req, res) => {
       merchantRequestId: merchantReq,
     });
   } catch (e) {
-    console.error("STK:", e.response?.data || e.message);
-    res.status(500).json({
-      error:
-        e.response?.data?.errorMessage ||
-        e.response?.data?.errorMessage ||
-        e.message ||
-        "Could not initiate M-Pesa",
+    const daraja = e.response?.data;
+    const detail = getDarajaResultDesc(daraja) || e.message || "Could not initiate M-Pesa";
+    console.error("STK:", daraja || e.message);
+    const failedOrder = await markOrderFailed(order.id, {
+      checkoutId: daraja?.CheckoutRequestID || daraja?.MerchantRequestID || `stk-init-${Date.now()}`,
+      detail,
+    });
+    const cancelled = failedOrder?.fulfillmentStatus === OrderFulfillmentStatus.CANCELLED;
+    res.status(400).json({
+      status: cancelled ? "cancelled" : "failed",
+      error: cancelled
+        ? "Order cancelled after failed M-Pesa attempts. Please create a new order."
+        : detail,
     });
   }
 });

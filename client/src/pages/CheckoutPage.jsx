@@ -173,7 +173,8 @@ export function CheckoutPage() {
       });
     } catch (e) {
       const error = e.response?.data?.error || "STK push failed — verify Daraja sandbox keys.";
-      setPaymentState(error.toLowerCase().includes("cancelled") ? "cancelled" : "failed");
+      const status = e.response?.data?.status;
+      setPaymentState(status === "cancelled" || error.toLowerCase().includes("cancelled") ? "cancelled" : "failed");
       setPollHint(error);
     }
   };
@@ -446,7 +447,7 @@ export function CheckoutPage() {
                           setStep(3);
                         } else if (status === "failed" || status === "FAILED") {
                           setPaymentState("failed");
-                          setPollHint(r.data.detail || "Payment failed. Please try again.");
+                          setPollHint(r.data.daraja || r.data.detail || "Payment failed. Please try again.");
                         } else {
                           window.alert("Payment not confirmed yet — finish payment or wait a few seconds.");
                         }
@@ -455,7 +456,7 @@ export function CheckoutPage() {
                       }
                     }}
                   >
-                    I have completed my card payment
+                    {form.paymentMethod === "CARD" ? "I have completed my card payment" : "Check M-Pesa payment"}
                   </Btn>
                 )}
                 <button type="button" className="text-sm text-muted underline" onClick={() => navigate("/account")}>
