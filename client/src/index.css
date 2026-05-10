@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  background: #ffffff;
+  color: #4b5563;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 700;
+}
+
+h1 {
+  font-size: min(2.2rem, 2rem + 1vw);
+}
+
+h2,
+h3 {
+  font-weight: 600;
+  color: #111827;
+}
+
+input,
+select,
+button,
+textarea {
+  font-family: inherit;
+}
+
+img[lazy-loading] {
+  content-visibility: auto;
+}
