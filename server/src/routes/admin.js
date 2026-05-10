@@ -412,8 +412,8 @@ router.get("/settings", async (_req, res) => {
     "mpesa_passkey",
     "mpesa_consumer_key",
     "mpesa_consumer_secret",
-    "pesapal_consumer_key",
-    "pesapal_consumer_secret",
+    "paystack_public_key",
+    "paystack_secret_key",
   ];
   const out = {};
   for (const k of keys) {

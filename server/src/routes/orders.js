@@ -10,6 +10,7 @@ import { sendOrderEmails } from "../services/email.js";
 import { PaymentMethod, PaymentStatus, OrderFulfillmentStatus } from "@prisma/client";
 
 const router = Router();
+const MPESA_FAILURE_MARKER = "[MPESA_FAIL:";
 
 router.get("/status/:orderNumber", async (req, res) => {
   const ord = await prisma.order.findUnique({
@@ -164,10 +165,35 @@ export async function markOrderPaid(orderId, extra = {}) {
   return fresh;
 }
 
-export async function markOrderFailed(orderId) {
+function countMpesaFailures(adminNotes = "") {
+  return (adminNotes.match(/\[MPESA_FAIL:/g) || []).length;
+}
+
+export async function markOrderFailed(orderId, { checkoutId, detail } = {}) {
+  const ord = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!ord || ord.paymentStatus === PaymentStatus.PAID) return ord;
+
+  const failureKey = String(checkoutId || ord.mpesaCheckoutId || `manual-${Date.now()}`);
+  const marker = `${MPESA_FAILURE_MARKER}${failureKey}]`;
+  const alreadyRecorded = Boolean(ord.adminNotes?.includes(marker));
+  const failureCount = countMpesaFailures(ord.adminNotes) + (alreadyRecorded ? 0 : 1);
+  const shouldCancel = failureCount >= Number(process.env.MPESA_MAX_FAILED_ATTEMPTS || 2);
+  const note = alreadyRecorded
+    ? ord.adminNotes
+    : [
+        ord.adminNotes,
+        `${marker} ${new Date().toISOString()} ${detail || "M-Pesa payment was not completed."}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
   return prisma.order.update({
     where: { id: orderId },
-    data: { paymentStatus: PaymentStatus.FAILED },
+    data: {
+      paymentStatus: PaymentStatus.FAILED,
+      fulfillmentStatus: shouldCancel ? OrderFulfillmentStatus.CANCELLED : ord.fulfillmentStatus,
+      adminNotes: note,
+    },
   });
 }
 

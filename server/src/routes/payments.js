@@ -7,10 +7,72 @@ import {
 } from "../services/mpesa.js";
 import { formattedForMpesa, isValidKenyaPhone } from "../utils/phone.js";
 import { markOrderFailed, markOrderPaid } from "./orders.js";
-import { PaymentMethod, PaymentStatus } from "@prisma/client";
+import { OrderFulfillmentStatus, PaymentMethod, PaymentStatus } from "@prisma/client";
 import axios from "axios";
 
 const router = Router();
+
+const paystackBaseUrl = "https://api.paystack.co";
+
+function getPaystackSecretKey() {
+  const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key) throw new Error("Paystack secret key missing. Add PAYSTACK_SECRET_KEY.");
+  return key;
+}
+
+function paystackHeaders() {
+  return {
+    Authorization: `Bearer ${getPaystackSecretKey()}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+}
+
+function paystackReference(orderNumber) {
+  return `RK-${orderNumber.replace(/[^a-zA-Z0-9=. -]/g, "").replace(/\s+/g, "")}-${Date.now()}`;
+}
+
+async function verifyPaystackReference(reference) {
+  const { data } = await axios.get(
+    `${paystackBaseUrl}/transaction/verify/${encodeURIComponent(reference)}`,
+    { headers: paystackHeaders() },
+  );
+  return data?.data;
+}
+
+function paystackStatusKind(tx) {
+  const status = String(tx?.status || "").toLowerCase();
+  if (status === "success") return "paid";
+  if (["failed", "abandoned", "reversed"].includes(status)) return "failed";
+  return "pending";
+}
+
+async function syncPaystackOrder(order, reference) {
+  const tx = await verifyPaystackReference(reference);
+  const kind = paystackStatusKind(tx);
+
+  if (kind === "paid") {
+    await markOrderPaid(order.id, {
+      pesapalOrderId: reference,
+    });
+  } else if (kind === "failed") {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        paymentStatus: PaymentStatus.FAILED,
+        pesapalOrderId: reference,
+        adminNotes: [
+          order.adminNotes,
+          `[PAYSTACK_FAIL:${reference}] ${new Date().toISOString()} ${tx?.gateway_response || "Card payment was not completed."}`,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    });
+  }
+
+  return { kind, tx };
+}
 
 router.post("/mpesa/stk-push", async (req, res) => {
   const { orderId, phone } = req.body || {};
@@ -23,6 +85,11 @@ router.post("/mpesa/stk-push", async (req, res) => {
   }
   if (![PaymentStatus.PENDING, PaymentStatus.FAILED].includes(order.paymentStatus)) {
     return res.status(400).json({ error: "Order payment already finalized" });
+  }
+  if (order.fulfillmentStatus === OrderFulfillmentStatus.CANCELLED) {
+    return res.status(400).json({
+      error: "This order was cancelled after failed M-Pesa attempts. Please create a new order.",
+    });
   }
 
   try {
@@ -77,10 +144,13 @@ router.get("/mpesa/status/:orderNumber", async (req, res) => {
     return res.json({ status: "paid", orderNumber: ord.orderNumber, orderId: ord.id });
   }
   if (ord.paymentStatus === PaymentStatus.FAILED) {
+    const cancelled = ord.fulfillmentStatus === OrderFulfillmentStatus.CANCELLED;
     return res.json({
-      status: "failed",
+      status: cancelled ? "cancelled" : "failed",
       orderNumber: ord.orderNumber,
-      detail: "M-Pesa payment was not completed.",
+      detail: cancelled
+        ? "Order cancelled after failed M-Pesa attempts. Please create a new order."
+        : "M-Pesa payment was not completed.",
     });
   }
 
@@ -108,10 +178,16 @@ router.get("/mpesa/status/:orderNumber", async (req, res) => {
     const desc = q?.ResultDesc || q?.ResultDescription || "";
     const resultCode = q?.ResultCode ?? q?.resultCode;
     if (resultCode !== undefined && String(resultCode) !== "0") {
-      await markOrderFailed(ord.id);
+      const failedOrder = await markOrderFailed(ord.id, {
+        checkoutId: checkoutReqId,
+        detail: desc || "M-Pesa payment was not completed.",
+      });
+      const cancelled = failedOrder?.fulfillmentStatus === OrderFulfillmentStatus.CANCELLED;
       return res.json({
-        status: "failed",
-        daraja: desc || "M-Pesa payment was not completed.",
+        status: cancelled ? "cancelled" : "failed",
+        daraja: cancelled
+          ? "Order cancelled after failed M-Pesa attempts. Please create a new order."
+          : desc || "M-Pesa payment was not completed.",
         orderNumber: ord.orderNumber,
       });
     }
@@ -148,7 +224,10 @@ router.post("/mpesa/callback", async (req, res) => {
     if (!order) return;
 
     if (Number(resultCode) !== 0) {
-      await markOrderFailed(order.id);
+      await markOrderFailed(order.id, {
+        checkoutId: checkoutReq,
+        detail: stk?.ResultDesc || "M-Pesa payment was not completed.",
+      });
       return;
     }
 
@@ -160,89 +239,115 @@ router.post("/mpesa/callback", async (req, res) => {
   }
 });
 
-router.post("/pesapal/create", async (req, res) => {
-  const { orderId, callbackUrl, cancelUrl } = req.body || {};
-  const baseUrl =
-    process.env.PESAPAL_BASE_URL ||
-    (process.env.PESAPAL_ENV === "live"
-      ? "https://pay.pesapal.com/v3/api"
-      : "https://cybqa.pesapal.com/pesapalv3/api");
+router.post("/paystack/create", async (req, res) => {
+  const { orderId } = req.body || {};
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { user: true },
   });
   if (!order || order.paymentMethod !== PaymentMethod.CARD) {
-    return res.status(400).json({ error: "Invalid order for Pesapal" });
+    return res.status(400).json({ error: "Invalid order for Paystack" });
   }
-  const key = process.env.PESAPAL_CONSUMER_KEY;
-  const secret = process.env.PESAPAL_CONSUMER_SECRET;
-  if (!key || !secret) {
-    return res.status(503).json({
-      error:
-        "Pesapal credentials not configured. Add PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET.",
-    });
+  if (order.paymentStatus === PaymentStatus.PAID) {
+    return res.status(400).json({ error: "Order is already paid" });
   }
 
   try {
-    const tokenResp = await axios.post(
-      `${baseUrl}/Auth/RequestToken`,
-      { consumer_key: key, consumer_secret: secret },
-      { headers: { "Content-Type": "application/json", Accept: "application/json" } },
-    );
-
-    const bearer = tokenResp.data?.token;
-    if (!bearer) throw new Error("No Pesapal bearer token returned");
-
     const customerEmail = order.guestEmail || order.user?.email || "guest@example.com";
-    const orderReq = {
-      id: order.orderNumber,
-      currency: "KES",
-      amount: order.totalAmount,
-      description: `RefurbKE order ${order.orderNumber}`,
-      callback_url:
-        callbackUrl || `${process.env.CLIENT_URL}/checkout/pesapal-complete?order=${order.orderNumber}`,
-      notification_id: process.env.PESAPAL_IPN || "https://localhost/ipn-placeholder",
-      billing_address: {
-        email_address: customerEmail,
-        phone_number: order.guestPhone || "",
-      },
-      cancel_url: cancelUrl || `${process.env.CLIENT_URL}/checkout?cancel=1`,
-    };
+    const reference = paystackReference(order.orderNumber);
+    const clientUrl = String(process.env.CLIENT_URL || "").split(",")[0] || "http://localhost:5173";
+    const callbackUrl = `${clientUrl.replace(/\/$/, "")}/checkout?order=${encodeURIComponent(
+      order.orderNumber,
+    )}&provider=paystack`;
 
-    const create = await axios.post(`${baseUrl}/Transactions/SubmitOrderRequest`, orderReq, {
-      headers: {
-        Authorization: `Bearer ${bearer}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
+    const { data } = await axios.post(
+      `${paystackBaseUrl}/transaction/initialize`,
+      {
+        email: customerEmail,
+        amount: Math.round(Number(order.totalAmount) * 100),
+        currency: process.env.PAYSTACK_CURRENCY || "KES",
+        reference,
+        callback_url: callbackUrl,
+        channels: ["card"],
+        metadata: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          customerName: order.guestName || order.user?.fullName || "",
+          phone: order.guestPhone || "",
+        },
       },
-    });
-
-    const iframe = create.data?.redirect_url || create.data?.redirectUrl || create.data?.orderRedirectUrl;
+      { headers: paystackHeaders() },
+    );
 
     await prisma.order.update({
       where: { id: order.id },
-      data: { pesapalOrderId: create.data?.order_tracking_id || create.data?.orderTrackingId },
+      data: {
+        pesapalOrderId: reference,
+        paymentStatus: PaymentStatus.PENDING,
+      },
     });
 
     res.json({
-      iframeUrl: iframe || create.data,
-      pesapalTrackingId: create.data?.order_tracking_id,
+      authorizationUrl: data?.data?.authorization_url,
+      accessCode: data?.data?.access_code,
+      reference: data?.data?.reference || reference,
     });
   } catch (e) {
-    console.error("pesapal:", e.response?.data || e.message);
+    console.error("paystack:", e.response?.data || e.message);
     res.status(500).json({
-      error: e.response?.data?.message || e.message || "Pesapal order failed",
+      error: e.response?.data?.message || e.message || "Paystack order failed",
     });
   }
 });
 
-router.post("/pesapal/ipn-complete", async (req, res) => {
-  const { orderTrackingId } = req.body || {};
-  if (!orderTrackingId) return res.status(400).json({ error: "missing" });
-  const ord = await prisma.order.findFirst({ where: { pesapalOrderId: String(orderTrackingId) } });
-  if (ord) await markOrderPaid(ord.id, {});
-  res.json({ ok: true });
+router.get("/paystack/status/:orderNumber", async (req, res) => {
+  const ord = await prisma.order.findUnique({ where: { orderNumber: req.params.orderNumber } });
+  if (!ord) return res.status(404).json({ status: "not_found" });
+
+  if (ord.paymentStatus === PaymentStatus.PAID) {
+    return res.json({ status: "paid", orderNumber: ord.orderNumber, orderId: ord.id });
+  }
+  if (ord.paymentStatus === PaymentStatus.FAILED) {
+    return res.json({
+      status: "failed",
+      orderNumber: ord.orderNumber,
+      detail: "Card payment was not completed.",
+    });
+  }
+  if (!ord.pesapalOrderId) {
+    return res.json({ status: "pending", orderNumber: ord.orderNumber, detail: "no_reference" });
+  }
+
+  try {
+    const synced = await syncPaystackOrder(ord, req.query.reference || ord.pesapalOrderId);
+    return res.json({
+      status: synced.kind,
+      orderNumber: ord.orderNumber,
+      detail: synced.tx?.gateway_response || synced.tx?.message || "",
+    });
+  } catch (e) {
+    console.error("paystack status:", e.response?.data || e.message);
+    return res.json({
+      status: "pending",
+      detail: e.message,
+      orderNumber: ord.orderNumber,
+    });
+  }
+});
+
+router.post("/paystack/webhook", async (req, res) => {
+  const event = req.body || {};
+  const reference = event?.data?.reference;
+  res.sendStatus(200);
+  if (event.event !== "charge.success" || !reference) return;
+
+  try {
+    const ord = await prisma.order.findFirst({ where: { pesapalOrderId: String(reference) } });
+    if (ord) await syncPaystackOrder(ord, String(reference));
+  } catch (e) {
+    console.error("paystack webhook:", e.response?.data || e.message);
+  }
 });
 
 export default router;

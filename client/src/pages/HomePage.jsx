@@ -7,7 +7,7 @@ import { ProductGridSkeleton } from "../components/SkeletonGrid.jsx";
 
 const trust = [
   { t: "Tested & Verified", d: "65+ point refurbishment checklist before dispatch." },
-  { t: "M-Pesa Payments", d: "STK Push and card checkout via Pesapal at checkout." },
+  { t: "M-Pesa Payments", d: "STK Push and card checkout via Paystack at checkout." },
   { t: "Nairobi Delivery", d: "Same-county Nairobi routes with predictable flat rates." },
   { t: "12‑Month Warranty", d: "Local warranty honoured by RefurbKE on eligible devices." },
 ];
@@ -202,7 +202,7 @@ export function HomePage() {
             <p className="text-primary font-semibold text-sm mb-2">Step 2</p>
             <h3 className="text-lg text-ink font-semibold mb-2">Order & pay via M-Pesa</h3>
             <p className="text-sm text-muted">
-              Choose STK Push to your Kenyan line or Pesapal checkout for Mastercard and Visa rails.
+              Choose STK Push to your Kenyan line or Paystack checkout for Mastercard and Visa rails.
             </p>
           </div>
           <div className="border border-border rounded bg-white shadow-card p-5">

@@ -42,8 +42,8 @@ export function AdminSettingsPage() {
         {row("mpesa_passkey", "M-Pesa passkey/Lipa Na Mpesa passphrase", true)}
         {row("mpesa_consumer_key", "Daraja consumer key")}
         {row("mpesa_consumer_secret", "Daraja consumer secret", true)}
-        {row("pesapal_consumer_key", "Pesapal consumer key")}
-        {row("pesapal_consumer_secret", "Pesapal consumer secret", true)}
+        {row("paystack_public_key", "Paystack public key")}
+        {row("paystack_secret_key", "Paystack secret key", true)}
         <Btn onClick={save}>Save configuration</Btn>
       </div>
     </div>

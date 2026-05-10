@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createApp } from "./app.js";
+import { startMpesaReconciler } from "./services/mpesaReconciler.js";
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -7,3 +8,4 @@ const app = createApp();
 app.listen(PORT, () => {
   console.log(`RefurbKE API listening on http://localhost:${PORT}`);
 });
+startMpesaReconciler();

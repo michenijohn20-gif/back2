@@ -92,7 +92,7 @@ Add these in Railway **Variables** (same names as `server/.env.example`). **Neve
 
 ### Payments / email / uploads (when ready)
 
-- `MPESA_*`, `PESAPAL_*`, `SMTP_*`, `CLOUDINARY_*`, `GOOGLE_*`, `ADMIN_NOTIFICATION_EMAIL`, etc., as in `.env.example`.
+- `MPESA_*`, `PAYSTACK_*`, `SMTP_*`, `CLOUDINARY_*`, `GOOGLE_*`, `ADMIN_NOTIFICATION_EMAIL`, etc., as in `.env.example`.
 
 **M-Pesa callback:** After first deploy, copy your public Railway URL (e.g. `https://refurbke-production.up.railway.app`) and set:
 

@@ -31,7 +31,6 @@ export function CheckoutPage() {
   const [errors, setErrors] = useState({});
   const [order, setOrder] = useState(null);
   const [mpesaPhone, setMpesaPhone] = useState("");
-  const [pesapalUrl, setPesapalUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [pollHint, setPollHint] = useState("");
   const [paymentState, setPaymentState] = useState("idle");
@@ -41,6 +40,49 @@ export function CheckoutPage() {
     api.get("/api/counties").then((r) => setCounties(r.data));
     api.get("/api/shipping-rates").then((r) => setRates(r.data));
   }, [accessToken]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const provider = params.get("provider");
+    const orderNumber = params.get("order");
+    const reference = params.get("reference");
+    if (provider !== "paystack" || !orderNumber) return;
+
+    let stopped = false;
+    setStep(2);
+    setPaymentState("pending");
+    setPollHint("Verifying card payment...");
+
+    api
+      .get(`/api/payments/paystack/status/${orderNumber}`, {
+        params: reference ? { reference } : undefined,
+      })
+      .then((r) => {
+        if (stopped) return;
+        const status = r.data.status || r.data.paymentStatus;
+        setOrder({ orderNumber, id: r.data.orderId });
+        if (status === "paid" || status === "PAID") {
+          setPaymentState("paid");
+          clearCart();
+          setStep(3);
+        } else if (status === "failed" || status === "FAILED") {
+          setPaymentState("failed");
+          setPollHint(r.data.detail || "Card payment failed. Please try again.");
+        } else {
+          setPollHint("Card payment is still pending. Use the button below to check again.");
+        }
+      })
+      .catch(() => {
+        if (!stopped) {
+          setPaymentState("failed");
+          setPollHint("Could not verify card payment yet.");
+        }
+      });
+
+    return () => {
+      stopped = true;
+    };
+  }, [clearCart]);
 
   useEffect(() => {
     if (user) {
@@ -63,8 +105,10 @@ export function CheckoutPage() {
   const total = subtotal + shippingAmount;
 
   useEffect(() => {
-    if (!items.length) navigate("/cart");
-  }, [items, navigate]);
+    const params = new URLSearchParams(window.location.search);
+    const isPaystackReturn = params.get("provider") === "paystack" && params.get("order");
+    if (!items.length && !order && !isPaystackReturn) navigate("/cart");
+  }, [items, order, navigate]);
 
   useEffect(() => {
     if (!order || step !== 2) return;
@@ -82,7 +126,7 @@ export function CheckoutPage() {
         const r =
           form.paymentMethod === "MPESA"
             ? await api.get(`/api/payments/mpesa/status/${order.orderNumber}`)
-            : await api.get(`/api/orders/status/${order.orderNumber}`);
+            : await api.get(`/api/payments/paystack/status/${order.orderNumber}`);
         const status = r.data.status || r.data.paymentStatus;
         if (status === "paid" || status === "PAID") {
           stopped = true;
@@ -91,10 +135,10 @@ export function CheckoutPage() {
           clearCart();
           setStep(3);
         }
-        if (status === "failed" || status === "FAILED") {
+        if (status === "failed" || status === "FAILED" || status === "cancelled") {
           stopped = true;
           clearInterval(id);
-          setPaymentState("failed");
+          setPaymentState(status === "cancelled" ? "cancelled" : "failed");
           setPollHint(r.data.daraja || r.data.detail || "M-Pesa payment failed. Please try again.");
         }
       } catch {
@@ -127,23 +171,26 @@ export function CheckoutPage() {
         phone,
       });
     } catch (e) {
-      setPaymentState("failed");
-      setPollHint(e.response?.data?.error || "STK push failed — verify Daraja sandbox keys.");
+      const error = e.response?.data?.error || "STK push failed — verify Daraja sandbox keys.";
+      setPaymentState(error.toLowerCase().includes("cancelled") ? "cancelled" : "failed");
+      setPollHint(error);
     }
   };
 
-  const startPesapal = async (ord) => {
+  const startPaystack = async (ord) => {
     setPaymentState("pending");
+    setPollHint("Redirecting to secure card checkout...");
     try {
-      const r = await api.post("/api/payments/pesapal/create", { orderId: ord.id });
-      if (r.data?.iframeUrl) {
-        setPesapalUrl(r.data.iframeUrl);
-        setPollHint("Complete payment inside the secure Pesapal frame, then wait for confirmation.");
+      const r = await api.post("/api/payments/paystack/create", { orderId: ord.id });
+      if (r.data?.authorizationUrl) {
+        window.location.assign(r.data.authorizationUrl);
       } else {
-        setPollHint("Pesapal did not return an iframe URL — verify API credentials.");
+        setPaymentState("failed");
+        setPollHint("Paystack did not return a checkout URL — verify API credentials.");
       }
     } catch (e) {
-      setPollHint(e.response?.data?.error || "Pesapal unavailable");
+      setPaymentState("failed");
+      setPollHint(e.response?.data?.error || "Paystack unavailable");
     }
   };
 
@@ -186,7 +233,7 @@ export function CheckoutPage() {
       if (form.paymentMethod === "MPESA") {
         await startMpesa(r.data, mpesaPhone || form.phone);
       } else {
-        await startPesapal(r.data);
+        await startPaystack(r.data);
       }
     } catch (err) {
       window.alert(err.response?.data?.error || "Could not place order");
@@ -315,7 +362,7 @@ export function CheckoutPage() {
                   checked={form.paymentMethod === "CARD"}
                   onChange={() => setForm({ ...form, paymentMethod: "CARD" })}
                 />
-                Card (Pesapal)
+                Card
               </label>
 
               {form.paymentMethod === "MPESA" && (
@@ -352,12 +399,12 @@ export function CheckoutPage() {
               {pollHint && (
                 <div
                   className={`flex items-start gap-3 text-sm border rounded p-3 ${
-                    paymentState === "failed"
+                    ["failed", "cancelled"].includes(paymentState)
                       ? "text-red-700 border-red-200 bg-red-50"
                       : "text-body border-dashed border-border bg-surface"
                   }`}
                 >
-                  {paymentState === "failed" ? (
+                  {["failed", "cancelled"].includes(paymentState) ? (
                     <span className="mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border border-red-500 text-[10px] font-semibold shrink-0">
                       !
                     </span>
@@ -367,26 +414,38 @@ export function CheckoutPage() {
                   <span>{pollHint}</span>
                 </div>
               )}
-              {pesapalUrl && (
-                <iframe title="Pesapal" src={pesapalUrl} className="w-full h-[620px] border border-border rounded" />
-              )}
               <div className="flex gap-3 flex-wrap">
                 {form.paymentMethod === "MPESA" && paymentState === "failed" ? (
                   <Btn variant="secondary" disabled={busy} onClick={() => startMpesa(order, mpesaPhone || form.phone)}>
                     Try M-Pesa again
+                  </Btn>
+                ) : form.paymentMethod === "MPESA" && paymentState === "cancelled" ? (
+                  <Btn
+                    variant="secondary"
+                    onClick={() => {
+                      setOrder(null);
+                      setPaymentState("idle");
+                      setPollHint("");
+                    }}
+                  >
+                    Create a new order
                   </Btn>
                 ) : (
                   <Btn
                     variant="secondary"
                     onClick={async () => {
                       try {
-                        const r = await api.get(`/api/orders/status/${order.orderNumber}`);
-                        if (r.data.paymentStatus === "PAID") {
+                        const r =
+                          form.paymentMethod === "CARD"
+                            ? await api.get(`/api/payments/paystack/status/${order.orderNumber}`)
+                            : await api.get(`/api/orders/status/${order.orderNumber}`);
+                        const status = r.data.status || r.data.paymentStatus;
+                        if (status === "paid" || status === "PAID") {
                           clearCart();
                           setStep(3);
-                        } else if (r.data.paymentStatus === "FAILED") {
+                        } else if (status === "failed" || status === "FAILED") {
                           setPaymentState("failed");
-                          setPollHint("Payment failed. Please try again.");
+                          setPollHint(r.data.detail || "Payment failed. Please try again.");
                         } else {
                           window.alert("Payment not confirmed yet — finish payment or wait a few seconds.");
                         }

@@ -11,13 +11,13 @@ Full-stack React + Express refurbishment marketplace tailored for Kenyan buyers 
 | Auth | JWT (customers) · dedicated admin JWT (`ADMIN_JWT_SECRET`) |
 | Media | Cloudinary uploads via admin `/api/admin/upload` |
 | Email | Nodemailer (transactional confirmations when SMTP is configured) |
-| Payments | Safaricom Daraja STK Push + Pesapal iframe (sandbox/live URLs via env) |
+| Payments | Safaricom Daraja STK Push + Paystack card checkout |
 
 ## Prerequisites
 
 - Node.js ≥ 18
 - PostgreSQL 14+
-- Accounts for Daraja / Pesapal / Cloudinary when you graduate beyond localhost
+- Accounts for Daraja / Paystack / Cloudinary when you graduate beyond localhost
 
 ## 1. Prepare the database
 
@@ -76,13 +76,13 @@ Daraja essentials live in `.env`:
 3. Paste callback URL reachable from Safaricom.
 4. The checkout UI polls `/api/payments/mpesa/status/:orderNumber` every five seconds after STK initiation (server queries `stkpushquery`).
 
-Pesapal v3 essentials:
+Paystack card essentials:
 
 ```
-PESAPAL_CONSUMER_KEY=
-PESAPAL_CONSUMER_SECRET=
-PESAPAL_BASE_URL=https://cybqa.pesapal.com/pesapalv3/api   # or live https://pay.pesapal.com/v3/api
-PESAPAL_IPN=                                                # HTTPS IPN endpoint registered inside Pesapal
+PAYSTACK_SECRET_KEY=
+PAYSTACK_PUBLIC_KEY=
+PAYSTACK_CURRENCY=KES
+PAYSTACK_WEBHOOK_URL=https://YOUR-RAILWAY-URL.up.railway.app/api/payments/paystack/webhook
 ```
 
 ## 3. Run the storefront
@@ -141,7 +141,7 @@ npm run build          # production bundle inside client/dist
 | `/products` | Listing with filters drawer (mobile), pagination |
 | `/products/:slug` | PDP with refurbishment tabs, galleries, specs |
 | `/search` | Mirrors listing with search headline |
-| `/cart` · `/checkout` | Zustand cart + Kenyan delivery wizard + STK/Pesapal orchestration |
+| `/cart` · `/checkout` | Zustand cart + Kenyan delivery wizard + STK/Paystack orchestration |
 | `/account/*` | Orders (with timelines), wishlist, profile, addresses, password |
 | `/admin/*` | KPI dashboard, fulfilment tooling, catalogue tools |
 

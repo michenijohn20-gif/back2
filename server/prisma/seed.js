@@ -424,8 +424,8 @@ async function main() {
       { key: "mpesa_passkey", value: "" },
       { key: "mpesa_consumer_key", value: "" },
       { key: "mpesa_consumer_secret", value: "" },
-      { key: "pesapal_consumer_key", value: "" },
-      { key: "pesapal_consumer_secret", value: "" },
+      { key: "paystack_public_key", value: "" },
+      { key: "paystack_secret_key", value: "" },
     ],
     skipDuplicates: true,
   });

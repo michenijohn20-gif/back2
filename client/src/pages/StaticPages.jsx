@@ -70,7 +70,7 @@ export function PrivacyPage() {
         We store your name, email, phone, and delivery counties solely to fulfil orders, send transactional
         updates, and satisfy tax record keeping under Kenyan regulations.
       </p>
-      <p>Payment payloads for M-Pesa and Pesapal are processed by regulated partners; RefurbKE never writes your PIN or CVV.</p>
+      <p>Payment payloads for M-Pesa and Paystack are processed by regulated partners; RefurbKE never writes your PIN or CVV.</p>
     </article>
   );
 }
