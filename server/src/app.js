@@ -16,13 +16,45 @@ import wishlistRouter from "./routes/wishlist.js";
 import accountRouter from "./routes/account.js";
 import adminRouter from "./routes/admin.js";
 
+function normalizeOrigin(origin) {
+  return String(origin || "").trim().replace(/\/+$/, "");
+}
+
+function allowedCorsOrigins() {
+  return (process.env.CLIENT_URL || "")
+    .split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean);
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  const clean = normalizeOrigin(origin);
+  const allowed = allowedCorsOrigins();
+  if (!allowed.length) return true;
+  if (allowed.includes(clean)) return true;
+
+  return allowed.some((base) => {
+    try {
+      const baseUrl = new URL(base);
+      const originUrl = new URL(clean);
+      return (
+        baseUrl.hostname.endsWith(".netlify.app") &&
+        originUrl.hostname.endsWith(`--${baseUrl.hostname}`)
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function createApp() {
   const app = express();
   app.use(
     cors({
-      origin: process.env.CLIENT_URL
-        ? process.env.CLIENT_URL.split(",").map((s) => s.trim())
-        : true,
+      origin(origin, cb) {
+        cb(null, isAllowedOrigin(origin));
+      },
       credentials: true,
     }),
   );

@@ -166,7 +166,7 @@ export async function markOrderPaid(orderId, extra = {}) {
 }
 
 function countMpesaFailures(adminNotes = "") {
-  return (adminNotes.match(/\[MPESA_FAIL:/g) || []).length;
+  return ((adminNotes || "").match(/\[MPESA_FAIL:/g) || []).length;
 }
 
 export async function markOrderFailed(orderId, { checkoutId, detail } = {}) {
