@@ -167,21 +167,33 @@ export function ProductDetailPage() {
           <div className="space-y-4">
             <p className="text-sm text-muted">{p.brand?.name}</p>
             <h1 className="text-3xl font-semibold text-ink leading-tight">{p.name}</h1>
-            <div className="flex flex-wrap gap-2">
+            <div>
+              <p className="text-sm font-semibold text-ink mb-2">Condition</p>
+              <div className="grid grid-cols-3 gap-2">
               {CONDITION_GUIDE.map((c) => (
                 <button
                   type="button"
                   key={c.key}
                   onClick={() => setCondition(c.key)}
-                  className={`border rounded-full px-3 py-1 text-sm ${
+                  className={`text-left border rounded p-3 text-sm transition ${
                     condition === c.key
-                      ? "border-primary text-primary bg-[#EFF6FF]"
-                      : "border-border text-body"
+                      ? "border-primary bg-[#EFF6FF] ring-2 ring-primary/10"
+                      : "border-border bg-white text-body hover:border-primary/60"
                   }`}
                 >
-                  {c.label}
+                  <span
+                    className={`mb-2 inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                      condition === c.key ? "border-primary bg-primary" : "border-muted"
+                    }`}
+                  >
+                    {condition === c.key && <span className="h-2 w-2 rounded-full bg-white" />}
+                  </span>
+                  <span className={`block font-semibold ${condition === c.key ? "text-primary" : "text-ink"}`}>
+                    {c.label}
+                  </span>
                 </button>
               ))}
+              </div>
             </div>
             <p className="text-sm text-body">
               {CONDITION_GUIDE.find((c) => c.key === condition)?.copy}

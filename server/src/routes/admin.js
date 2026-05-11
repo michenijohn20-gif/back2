@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import multer from "multer";
+import axios from "axios";
 import { prisma } from "../prisma.js";
 import { adminAuth, signAdminToken } from "../middleware/adminAuth.js";
 import {
@@ -16,6 +17,71 @@ import { PaymentStatus, OrderFulfillmentStatus } from "@prisma/client";
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = Router();
+const mobileApiBase = "https://api.mobileapi.dev";
+
+function mobileApiHeaders() {
+  const key = process.env.MOBILEAPI_KEY;
+  if (!key) throw new Error("MobileAPI key missing. Add MOBILEAPI_KEY to enable spec autofill.");
+  return { Authorization: `Token ${key}`, Accept: "application/json" };
+}
+
+function compactSpecs(device = {}) {
+  const specs = {
+    Brand: device.brand?.name || device.brand_name || device.manufacturer_name || "",
+    Model: device.name || "",
+    Display: device.screen_resolution || device.display || "",
+    Camera: device.camera || "",
+    Battery: device.battery_capacity || "",
+    Hardware: device.hardware || "",
+    Storage: device.storage || "",
+    Colours: device.colors || "",
+    Weight: device.weight || "",
+    Thickness: device.thickness || "",
+    Released: device.release_date || "",
+  };
+  return Object.fromEntries(Object.entries(specs).filter(([, value]) => value));
+}
+
+function imageUrlsFromDevice(device = {}) {
+  const raw = [
+    device.image_url,
+    device.image,
+    device.thumbnail,
+    device.main_image,
+    ...(Array.isArray(device.images) ? device.images : []),
+  ];
+  return raw
+    .map((item) => (typeof item === "string" ? item : item?.image_url || item?.url))
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function variantsFromDevice(device = {}) {
+  const storages = String(device.storage || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const colors = String(device.colors || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const baseStorages = storages.length ? storages : [""];
+  const baseColors = colors.length ? colors : [""];
+  return baseStorages.slice(0, 3).flatMap((storage) =>
+    baseColors.slice(0, 2).map((color) => ({
+      storage,
+      color,
+      priceExcellent: 0,
+      priceGood: 0,
+      priceFair: 0,
+      stockExcellent: 0,
+      stockGood: 0,
+      stockFair: 0,
+    })),
+  );
+}
 
 router.post("/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
@@ -171,6 +237,39 @@ router.get("/products", async (req, res) => {
     }),
   ]);
   res.json({ total, products, page: Number(page), pageSize: take });
+});
+
+router.get("/products/autofill", async (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (!q) return res.status(400).json({ error: "Search query required" });
+
+  try {
+    const { data } = await axios.get(`${mobileApiBase}/devices/search/`, {
+      params: { name: q },
+      headers: mobileApiHeaders(),
+    });
+    const devices = data.devices || data.results || (Array.isArray(data) ? data : []);
+    const device = devices[0] || data.device || data;
+    if (!device?.name) return res.status(404).json({ error: "No matching device found" });
+
+    res.json({
+      source: "MobileAPI.dev",
+      name: device.name,
+      description:
+        device.description ||
+        `${device.brand?.name || device.brand_name || ""} ${device.name} refurbished device, tested and ready for daily use.`,
+      whatsInBox: "Device, charging cable, SIM ejector tool, RefurbKE warranty card",
+      specs: compactSpecs(device),
+      imageUrls: imageUrlsFromDevice(device),
+      variants: variantsFromDevice(device),
+    });
+  } catch (e) {
+    const status = e.response?.status || 500;
+    res.status(status === 401 ? 503 : status).json({
+      error: e.message || "Could not fetch device specs",
+      detail: e.response?.data?.detail || e.response?.data?.message,
+    });
+  }
 });
 
 router.post("/products", async (req, res) => {
