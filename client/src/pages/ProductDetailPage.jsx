@@ -297,7 +297,7 @@ export function ProductDetailPage() {
 
         <div>
           <h2 className="text-xl font-semibold text-ink mb-4">Related devices</h2>
-          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             {(detail.related || []).map((rp) => (
               <ProductCard key={rp.id} product={rp} condition={condition} />
             ))}

@@ -286,10 +286,10 @@ export function ProductListPage({ mode = "catalog" }) {
   }, [mode, q, data.total]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-      <div className="flex items-start justify-between gap-4 mb-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6 sm:py-8">
+      <div className="flex items-start justify-between gap-3 mb-5 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">{title}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-ink">{title}</h1>
           {!data.total && !loading ? (
             <p className="text-sm text-muted mt-2">
               Try widening filters or explore{" "}
@@ -300,16 +300,16 @@ export function ProductListPage({ mode = "catalog" }) {
             </p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            className="lg:hidden px-3 py-2 rounded border border-border text-sm font-medium"
+            className="lg:hidden px-2.5 sm:px-3 py-2 rounded border border-border text-sm font-medium"
             onClick={() => setDrawer(true)}
           >
             Filters
           </button>
           <select
-            className="border border-border rounded-[6px] px-3 py-2 text-sm bg-white text-ink min-w-[200px]"
+            className="border border-border rounded-[6px] px-2 sm:px-3 py-2 text-sm bg-white text-ink w-[132px] sm:w-auto sm:min-w-[200px]"
             value={sort}
             onChange={(e) =>
               updateParam((sp) => {
@@ -339,7 +339,7 @@ export function ProductListPage({ mode = "catalog" }) {
               No refurbished units match right now — adjust filters or check back shortly.
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
               {data.products.map((p) => (
                 <ProductCard key={p.id} product={p} condition={condition} />
               ))}

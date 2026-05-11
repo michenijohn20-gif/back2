@@ -217,7 +217,7 @@ export function AccountPage() {
             {wishlist.length === 0 ? (
               <p className="text-sm text-muted">Save items with the heart icon while browsing.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
                 {wishlist.map((p) => (
                   <div key={p.id} className="border border-border rounded bg-white shadow-card p-3 space-y-2">
                     <ProductCard product={p} />

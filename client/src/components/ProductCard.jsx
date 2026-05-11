@@ -88,7 +88,7 @@ export function ProductCard({
         dense ? "" : ""
       }`}
     >
-      <Link to={`/products/${product.slug}`} className="relative block aspect-[4/3] bg-surface">
+      <Link to={`/products/${product.slug}`} className="relative block aspect-square sm:aspect-[4/3] bg-surface">
         <img
           loading="lazy"
           src={image || "/placeholder.svg"}
@@ -102,25 +102,29 @@ export function ProductCard({
             e.preventDefault();
             handleWish();
           }}
-          className="absolute top-2 right-2 p-2 rounded-full bg-white/90 border border-border text-muted hover:text-primary"
+          className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 p-1.5 sm:p-2 rounded-full bg-white/90 border border-border text-muted hover:text-primary"
           aria-label="Wishlist"
         >
           {heartIcon(false)}
         </button>
       </Link>
-      <div className="p-3 flex flex-col flex-1 gap-2">
+      <div className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5 sm:gap-2">
         <div className="flex items-start justify-between gap-2">
           <ConditionBadge condition={condition} />
         </div>
         <Link to={`/products/${product.slug}`} className="text-ink hover:text-primary">
-          <p className="text-sm font-semibold leading-snug line-clamp-2">
+          <p className="text-[13px] sm:text-sm font-semibold leading-snug line-clamp-2">
             {product.brand?.name && <span className="text-body font-medium">{product.brand.name} </span>}
             {product.name}
           </p>
         </Link>
-        {spec && <p className="text-sm text-muted line-clamp-1">{spec}</p>}
-        <p className="text-lg font-semibold text-ink mt-auto">{formatKes(price)}</p>
-        <Btn className="w-full" disabled={!defaultVariant?.id} onClick={handleCart}>
+        {spec && <p className="text-xs sm:text-sm text-muted line-clamp-1">{spec}</p>}
+        <p className="text-sm sm:text-lg font-semibold text-ink mt-auto">{formatKes(price)}</p>
+        <Btn
+          className="w-full px-2 py-1.5 sm:px-4 sm:py-2.5 text-xs sm:text-[15px]"
+          disabled={!defaultVariant?.id}
+          onClick={handleCart}
+        >
           Add to Cart
         </Btn>
       </div>

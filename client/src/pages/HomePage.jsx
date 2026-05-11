@@ -179,7 +179,7 @@ export function HomePage() {
           {loading ? (
             <ProductGridSkeleton cols={4} />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               {featured.slice(0, 8).map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}

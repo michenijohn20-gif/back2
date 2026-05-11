@@ -345,62 +345,91 @@ export function CheckoutPage() {
       )}
 
       {step === 2 && (
-        <div className="border border-border rounded bg-white shadow-card p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-ink">Payment</h2>
+        <div className="border border-border rounded bg-white shadow-card overflow-hidden">
+          <div className="p-5 sm:p-6 border-b border-border bg-surface/60">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Secure checkout</p>
+            <div className="mt-2 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+              <div>
+                <h2 className="text-xl font-semibold text-ink">Payment</h2>
+                <p className="text-sm text-muted">Choose how you want to complete this order.</p>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-xs text-muted">Total due</p>
+                <p className="text-2xl font-semibold text-ink">{formatKes(total)}</p>
+              </div>
+            </div>
+          </div>
 
           {!order ? (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={form.paymentMethod === "MPESA"}
-                  onChange={() => setForm({ ...form, paymentMethod: "MPESA" })}
+            <div className="p-5 sm:p-6 space-y-5">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <PaymentChoice
+                  active={form.paymentMethod === "MPESA"}
+                  title="M-Pesa STK Push"
+                  description="Get a prompt on your phone and enter your M-Pesa PIN."
+                  icon="M"
+                  onClick={() => setForm({ ...form, paymentMethod: "MPESA" })}
                 />
-                M-Pesa STK Push
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  checked={form.paymentMethod === "CARD"}
-                  onChange={() => setForm({ ...form, paymentMethod: "CARD" })}
+                <PaymentChoice
+                  active={form.paymentMethod === "CARD"}
+                  title="Card"
+                  description="Pay securely using Paystack card checkout."
+                  icon="C"
+                  onClick={() => setForm({ ...form, paymentMethod: "CARD" })}
                 />
-                Card
-              </label>
+              </div>
 
               {form.paymentMethod === "MPESA" && (
-                <div>
-                  <label className="text-sm text-muted">M-Pesa phone number</label>
+                <div className="border border-border rounded bg-white p-4 space-y-2">
+                  <label className="text-sm font-medium text-ink">M-Pesa phone number</label>
                   <input
-                    className="mt-1 w-full border border-border rounded px-3 py-2 text-sm"
+                    className="w-full border border-border rounded px-3 py-2.5 text-sm"
                     value={mpesaPhone}
                     onChange={(e) => setMpesaPhone(e.target.value)}
+                    placeholder="07XX XXX XXX"
                   />
+                  <p className="text-xs text-muted">Use the Safaricom line that should receive the STK prompt.</p>
                 </div>
               )}
 
-              <div className="border-t border-border pt-3 text-sm text-body space-y-1">
-                <div className="flex justify-between">
-                  <span>Total due</span>
-                  <span className="font-semibold text-ink">{formatKes(total)}</span>
+              <div className="rounded bg-surface border border-border p-4 text-sm space-y-2">
+                <div className="flex justify-between text-body">
+                  <span>Subtotal</span>
+                  <span>{formatKes(subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-body">
+                  <span>Delivery</span>
+                  <span>{formatKes(shippingAmount)}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-ink pt-2 border-t border-border">
+                  <span>Total</span>
+                  <span>{formatKes(total)}</span>
                 </div>
               </div>
 
-              <Btn disabled={busy} onClick={onPay}>
-                {busy ? "Processing…" : "Pay securely"}
-              </Btn>
-              <button type="button" className="text-sm text-muted ml-3 underline" onClick={() => setStep(1)}>
-                Back
-              </button>
-            </>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Btn className="w-full sm:w-auto" disabled={busy} onClick={onPay}>
+                  {busy ? "Processing..." : form.paymentMethod === "MPESA" ? "Send STK push" : "Continue to card payment"}
+                </Btn>
+                <button
+                  type="button"
+                  className="text-sm text-muted underline px-2 py-2"
+                  onClick={() => setStep(1)}
+                >
+                  Back to delivery
+                </button>
+              </div>
+            </div>
           ) : (
-            <>
-              <p className="text-sm text-body">
-                Order <span className="font-semibold text-ink">{order.orderNumber}</span> is pending payment
-                confirmation.
-              </p>
+            <div className="p-5 sm:p-6 space-y-5">
+              <div className="rounded bg-surface border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted">Order</p>
+                <p className="font-semibold text-ink mt-1">{order.orderNumber}</p>
+                <p className="text-sm text-muted mt-1">Payment confirmation is pending.</p>
+              </div>
               {pollHint && (
                 <div
-                  className={`flex items-start gap-3 text-sm border rounded p-3 ${
+                  className={`flex items-start gap-3 text-sm border rounded p-4 ${
                     ["failed", "cancelled"].includes(paymentState)
                       ? "text-red-700 border-red-200 bg-red-50"
                       : "text-body border-dashed border-border bg-surface"
@@ -416,13 +445,14 @@ export function CheckoutPage() {
                   <span>{pollHint}</span>
                 </div>
               )}
-              <div className="flex gap-3 flex-wrap">
+              <div className="flex flex-col sm:flex-row gap-3 sm:flex-wrap">
                 {form.paymentMethod === "MPESA" && paymentState === "failed" ? (
-                  <Btn variant="secondary" disabled={busy} onClick={() => startMpesa(order, mpesaPhone || form.phone)}>
+                  <Btn className="w-full sm:w-auto" variant="secondary" disabled={busy} onClick={() => startMpesa(order, mpesaPhone || form.phone)}>
                     Try M-Pesa again
                   </Btn>
                 ) : form.paymentMethod === "MPESA" && paymentState === "cancelled" ? (
                   <Btn
+                    className="w-full sm:w-auto"
                     variant="secondary"
                     onClick={() => {
                       setOrder(null);
@@ -434,6 +464,7 @@ export function CheckoutPage() {
                   </Btn>
                 ) : (
                   <Btn
+                    className="w-full sm:w-auto"
                     variant="secondary"
                     onClick={async () => {
                       try {
@@ -459,11 +490,11 @@ export function CheckoutPage() {
                     {form.paymentMethod === "CARD" ? "I have completed my card payment" : "Check M-Pesa payment"}
                   </Btn>
                 )}
-                <button type="button" className="text-sm text-muted underline" onClick={() => navigate("/account")}>
+                <button type="button" className="text-sm text-muted underline px-2 py-2" onClick={() => navigate("/account")}>
                   View orders
                 </button>
               </div>
-            </>
+            </div>
           )}
         </div>
       )}
@@ -483,6 +514,28 @@ export function CheckoutPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function PaymentChoice({ active, title, description, icon, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left border rounded p-4 transition bg-white ${
+        active ? "border-primary ring-2 ring-primary/10" : "border-border hover:border-primary/50"
+      }`}
+    >
+      <span
+        className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
+          active ? "bg-primary text-white" : "bg-surface text-muted border border-border"
+        }`}
+      >
+        {icon}
+      </span>
+      <span className="block mt-3 font-semibold text-ink">{title}</span>
+      <span className="block mt-1 text-sm text-muted leading-snug">{description}</span>
+    </button>
   );
 }
 
