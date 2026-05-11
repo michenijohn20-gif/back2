@@ -7,6 +7,11 @@ import { optionalAuth } from "../middleware/auth.js";
 
 const router = Router();
 
+function cleanImageUrl(url = "") {
+  const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
+  return (match ? match[2] : url).trim();
+}
+
 router.post("/quote", optionalAuth, async (req, res) => {
   const { county, items } = req.body || {};
   if (!county) return res.status(400).json({ error: "County required" });
@@ -62,7 +67,7 @@ export async function computeLines(items) {
     if (stockAvail < qty) throw new Error(`Insufficient stock for ${variant.product.name}`);
 
     subtotal += unitPrice * qty;
-    const img = variant.product.images[0]?.url || "";
+    const img = cleanImageUrl(variant.product.images[0]?.url || "");
     lines.push({
       variantId,
       quantity: qty,

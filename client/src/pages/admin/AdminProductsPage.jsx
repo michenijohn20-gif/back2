@@ -25,6 +25,11 @@ const blankProduct = {
   metaDescription: "",
 };
 
+function cleanImageUrl(url = "") {
+  const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
+  return (match ? match[2] : url).trim();
+}
+
 export function AdminProductsPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -34,6 +39,8 @@ export function AdminProductsPage() {
   const [lookup, setLookup] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingProductId, setEditingProductId] = useState("");
+  const [deletedVariantIds, setDeletedVariantIds] = useState([]);
   const [form, setForm] = useState(blankProduct);
   const [specsText, setSpecsText] = useState("{}");
   const [imageUrlsText, setImageUrlsText] = useState("");
@@ -64,6 +71,57 @@ export function AdminProductsPage() {
     load();
   };
 
+  const resetEditor = () => {
+    setForm({
+      ...blankProduct,
+      categoryId: categories[0]?.id || "",
+      brandId: brands[0]?.id || "",
+    });
+    setSpecsText("{}");
+    setImageUrlsText("");
+    setVariants([{ ...blankVariant }]);
+    setDeletedVariantIds([]);
+    setEditingProductId("");
+    setLookup("");
+  };
+
+  const openCreate = () => {
+    resetEditor();
+    setShowCreate(true);
+  };
+
+  const openEdit = async (id) => {
+    const { data } = await adminApi.get(`/api/admin/products/${id}`);
+    setEditingProductId(data.id);
+    setForm({
+      name: data.name || "",
+      description: data.description || "",
+      whatsInBox: data.whatsInBox || "",
+      categoryId: data.categoryId || "",
+      brandId: data.brandId || "",
+      featured: Boolean(data.featured),
+      metaTitle: data.metaTitle || "",
+      metaDescription: data.metaDescription || "",
+    });
+    setSpecsText(JSON.stringify(data.specs || {}, null, 2));
+    setImageUrlsText((data.images || []).map((img) => img.url).join("\n"));
+    const nextVariants = (data.variants || []).map((v) => ({
+      id: v.id,
+      storage: v.storage || "",
+      color: v.color || "",
+      priceExcellent: String(v.priceExcellent ?? ""),
+      priceGood: String(v.priceGood ?? ""),
+      priceFair: String(v.priceFair ?? ""),
+      stockExcellent: String(v.stockExcellent ?? 0),
+      stockGood: String(v.stockGood ?? 0),
+      stockFair: String(v.stockFair ?? 0),
+    }));
+    setVariants(nextVariants.length ? nextVariants : [{ ...blankVariant }]);
+    setDeletedVariantIds([]);
+    setShowCreate(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const autofill = async () => {
     if (!lookup.trim()) return;
     setLookupBusy(true);
@@ -87,7 +145,7 @@ export function AdminProductsPage() {
     }
   };
 
-  const create = async () => {
+  const saveProduct = async () => {
     setSaving(true);
     try {
       let specs = {};
@@ -97,7 +155,7 @@ export function AdminProductsPage() {
         window.alert("Specs must be valid JSON.");
         return;
       }
-      await adminApi.post("/api/admin/products", {
+      const payload = {
         ...form,
         specs,
         imageUrls: imageUrlsText.split("\n").map((u) => u.trim()).filter(Boolean),
@@ -110,19 +168,18 @@ export function AdminProductsPage() {
           stockGood: Number(v.stockGood || 0),
           stockFair: Number(v.stockFair || 0),
         })),
-      });
-      setForm({
-        ...blankProduct,
-        categoryId: categories[0]?.id || "",
-        brandId: brands[0]?.id || "",
-      });
-      setSpecsText("{}");
-      setImageUrlsText("");
-      setVariants([{ ...blankVariant }]);
+        deletedVariantIds,
+      };
+      if (editingProductId) {
+        await adminApi.patch(`/api/admin/products/${editingProductId}`, payload);
+      } else {
+        await adminApi.post("/api/admin/products", payload);
+      }
+      resetEditor();
       setShowCreate(false);
       load(1);
     } catch (e) {
-      window.alert(e.response?.data?.error || "Could not create product.");
+      window.alert(e.response?.data?.error || "Could not save product.");
     } finally {
       setSaving(false);
     }
@@ -132,6 +189,15 @@ export function AdminProductsPage() {
     setVariants((rows) => rows.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
   };
 
+  const removeVariant = (idx) => {
+    setVariants((rows) => {
+      const variant = rows[idx];
+      if (variant?.id) setDeletedVariantIds((ids) => [...ids, variant.id]);
+      const next = rows.filter((_, i) => i !== idx);
+      return next.length ? next : [{ ...blankVariant }];
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-3">
@@ -139,11 +205,19 @@ export function AdminProductsPage() {
           <h1 className="text-2xl font-semibold text-ink">Products</h1>
           <p className="text-xs text-muted">Add devices manually or autofill specs from MobileAPI.dev.</p>
         </div>
-        <Btn onClick={() => setShowCreate((v) => !v)}>{showCreate ? "Close" : "Add product"}</Btn>
+        <Btn onClick={showCreate ? () => setShowCreate(false) : openCreate}>{showCreate ? "Close" : "Add product"}</Btn>
       </div>
 
       {showCreate && (
         <div className="border border-border rounded bg-white shadow-card p-5 space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">
+              {editingProductId ? "Edit product" : "Create product"}
+            </h2>
+            <p className="text-xs text-muted">
+              Update product details, images, specs, prices, and stock from one place.
+            </p>
+          </div>
           <div className="grid md:grid-cols-[1fr_auto] gap-3">
             <input
               className="border border-border rounded px-3 py-2 text-sm"
@@ -164,12 +238,31 @@ export function AdminProductsPage() {
             </div>
           </div>
 
+          <label className="flex items-center gap-2 text-sm text-body">
+            <input
+              type="checkbox"
+              checked={form.featured}
+              onChange={(e) => setForm({ ...form, featured: e.target.checked })}
+            />
+            Feature this product on the storefront
+          </label>
+
           <TextArea label="Description" value={form.description} rows={4} onChange={(v) => setForm({ ...form, description: v })} />
           <TextArea label="What's in the box" value={form.whatsInBox} rows={2} onChange={(v) => setForm({ ...form, whatsInBox: v })} />
 
           <div className="grid md:grid-cols-2 gap-4">
+            <Field label="SEO title" value={form.metaTitle} onChange={(v) => setForm({ ...form, metaTitle: v })} />
+            <Field label="SEO description" value={form.metaDescription} onChange={(v) => setForm({ ...form, metaDescription: v })} />
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
             <TextArea label="Specs JSON" value={specsText} rows={8} onChange={setSpecsText} />
-            <TextArea label="Image URLs, one per line" value={imageUrlsText} rows={8} onChange={setImageUrlsText} />
+            <TextArea
+              label="Image URLs, one per line. Optional: Colour | https://image-url"
+              value={imageUrlsText}
+              rows={8}
+              onChange={setImageUrlsText}
+            />
           </div>
 
           <div className="space-y-3">
@@ -181,7 +274,7 @@ export function AdminProductsPage() {
             </div>
             <div className="space-y-3">
               {variants.map((v, idx) => (
-                <div key={idx} className="grid md:grid-cols-8 gap-2 border border-border rounded p-3">
+                <div key={idx} className="grid md:grid-cols-[repeat(8,minmax(0,1fr))_auto] gap-2 border border-border rounded p-3">
                   <SmallField label="Storage" value={v.storage} onChange={(value) => updateVariant(idx, { storage: value })} />
                   <SmallField label="Colour" value={v.color} onChange={(value) => updateVariant(idx, { color: value })} />
                   <SmallField label="Excellent" value={v.priceExcellent} onChange={(value) => updateVariant(idx, { priceExcellent: value })} />
@@ -190,14 +283,19 @@ export function AdminProductsPage() {
                   <SmallField label="Stock Ex" value={v.stockExcellent} onChange={(value) => updateVariant(idx, { stockExcellent: value })} />
                   <SmallField label="Stock Good" value={v.stockGood} onChange={(value) => updateVariant(idx, { stockGood: value })} />
                   <SmallField label="Stock Fair" value={v.stockFair} onChange={(value) => updateVariant(idx, { stockFair: value })} />
+                  <button type="button" className="text-xs text-red-600 self-end px-2 py-2" onClick={() => removeVariant(idx)}>
+                    Remove
+                  </button>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="flex gap-3 justify-end">
-            <Btn variant="secondary" onClick={() => setShowCreate(false)}>Cancel</Btn>
-            <Btn disabled={saving} onClick={create}>{saving ? "Creating..." : "Create product"}</Btn>
+            <Btn variant="secondary" onClick={() => { resetEditor(); setShowCreate(false); }}>Cancel</Btn>
+            <Btn disabled={saving} onClick={saveProduct}>
+              {saving ? "Saving..." : editingProductId ? "Save changes" : "Create product"}
+            </Btn>
           </div>
         </div>
       )}
@@ -221,7 +319,7 @@ export function AdminProductsPage() {
               return (
                 <tr key={p.id} className="border-t border-border">
                   <td className="p-3">
-                    <img loading="lazy" src={p.images?.[0]?.url || "/placeholder.svg"} alt="" className="h-12 w-12 object-cover rounded border border-border" />
+                    <img loading="lazy" src={cleanImageUrl(p.images?.[0]?.url) || "/placeholder.svg"} alt="" className="h-12 w-12 object-cover rounded border border-border" />
                   </td>
                   <td className="p-3">
                     <div className="font-semibold text-ink">{p.name}</div>
@@ -231,6 +329,9 @@ export function AdminProductsPage() {
                   <td className="p-3">{formatKes(v0?.priceExcellent || 0)}</td>
                   <td className="p-3">{stock}</td>
                   <td className="p-3 text-right">
+                    <button type="button" className="text-primary text-xs mr-3" onClick={() => openEdit(p.id)}>
+                      Edit
+                    </button>
                     <button type="button" className="text-red-600 text-xs" onClick={() => del(p.id)}>
                       Delete
                     </button>

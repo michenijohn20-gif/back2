@@ -4,6 +4,28 @@ import { asyncHandler } from "../util/asyncHandler.js";
 
 const router = Router();
 
+function imageColorFromUrl(url = "") {
+  const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+function cleanImageUrl(url = "") {
+  const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
+  return (match ? match[2] : url).trim();
+}
+
+function normalizeProductImages(product) {
+  if (!product?.images) return product;
+  return {
+    ...product,
+    images: product.images.map((img) => ({
+      ...img,
+      url: cleanImageUrl(img.url),
+      color: imageColorFromUrl(img.url),
+    })),
+  };
+}
+
 const productCardSelect = {
   id: true,
   name: true,
@@ -139,7 +161,8 @@ router.get("/", asyncHandler(async (req, res) => {
   ]);
 
   const cond = String(condition || "EXCELLENT").toUpperCase();
-  const products = rows.map((p) => {
+  const products = rows.map((row) => {
+    const p = normalizeProductImages(row);
     const variants = p.variants || [];
     let minP = Infinity;
     let maxP = -Infinity;
@@ -199,7 +222,10 @@ router.get(
       select: productCardSelect,
     });
 
-    res.json({ product, related });
+    res.json({
+      product: normalizeProductImages(product),
+      related: related.map(normalizeProductImages),
+    });
   }),
 );
 

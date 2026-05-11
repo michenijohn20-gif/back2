@@ -85,7 +85,13 @@ export function ProductDetailPage() {
   }
 
   const p = detail.product;
-  const images = (p.images || []).map((im) => im.url);
+  const allImages = p.images || [];
+  const variantColor = String(variant?.color || "").trim().toLowerCase();
+  const colorImages = variantColor
+    ? allImages.filter((im) => String(im.color || "").trim().toLowerCase() === variantColor)
+    : [];
+  const visibleImages = colorImages.length ? colorImages : allImages;
+  const images = visibleImages.map((im) => im.url);
 
   const specRows = Object.entries(p.specs || {});
 
@@ -100,6 +106,11 @@ export function ProductDetailPage() {
       quantity: 1,
       unitPrice: price,
     });
+  }
+
+  function selectVariant(v) {
+    setVariantId(v.id);
+    setActiveImg(0);
   }
 
   return (
@@ -206,7 +217,7 @@ export function ProductDetailPage() {
                   <button
                     type="button"
                     key={v.id}
-                    onClick={() => setVariantId(v.id)}
+                    onClick={() => selectVariant(v)}
                     className={`px-3 py-2 border rounded-full text-sm ${
                       variantId === v.id ? "border-primary text-primary bg-white" : "border-border bg-white"
                     }`}

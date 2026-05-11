@@ -272,6 +272,20 @@ router.get("/products/autofill", async (req, res) => {
   }
 });
 
+router.get("/products/:id", async (req, res) => {
+  const product = await prisma.product.findUnique({
+    where: { id: req.params.id },
+    include: {
+      brand: true,
+      category: true,
+      images: { orderBy: { sortOrder: "asc" } },
+      variants: { orderBy: { id: "asc" } },
+    },
+  });
+  if (!product) return res.status(404).json({ error: "Not found" });
+  res.json(product);
+});
+
 router.post("/products", async (req, res) => {
   const {
     name,
@@ -340,6 +354,9 @@ router.patch("/products/:id", async (req, res) => {
     featured,
     metaTitle,
     metaDescription,
+    variants,
+    deletedVariantIds,
+    imageUrls,
   } = req.body || {};
 
   let slug = existing.slug;
@@ -348,20 +365,68 @@ router.patch("/products/:id", async (req, res) => {
     slug = await uniqueProductSlug(prisma, base, id);
   }
 
-  const product = await prisma.product.update({
-    where: { id },
-    data: {
-      ...(name !== undefined ? { name } : {}),
-      ...(slug ? { slug } : {}),
-      ...(description !== undefined ? { description } : {}),
-      ...(whatsInBox !== undefined ? { whatsInBox } : {}),
-      ...(specs !== undefined ? { specs } : {}),
-      ...(categoryId !== undefined ? { categoryId } : {}),
-      ...(brandId !== undefined ? { brandId } : {}),
-      ...(featured !== undefined ? { featured: Boolean(featured) } : {}),
-      ...(metaTitle !== undefined ? { metaTitle } : {}),
-      ...(metaDescription !== undefined ? { metaDescription } : {}),
-    },
+  const product = await prisma.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id },
+      data: {
+        ...(name !== undefined ? { name } : {}),
+        ...(slug ? { slug } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(whatsInBox !== undefined ? { whatsInBox } : {}),
+        ...(specs !== undefined ? { specs } : {}),
+        ...(categoryId !== undefined ? { categoryId } : {}),
+        ...(brandId !== undefined ? { brandId } : {}),
+        ...(featured !== undefined ? { featured: Boolean(featured) } : {}),
+        ...(metaTitle !== undefined ? { metaTitle } : {}),
+        ...(metaDescription !== undefined ? { metaDescription } : {}),
+      },
+    });
+
+    if (Array.isArray(imageUrls)) {
+      await tx.productImage.deleteMany({ where: { productId: id } });
+      const images = imageUrls
+        .map((url, i) => ({ url: String(url).trim(), sortOrder: i, productId: id }))
+        .filter((img) => img.url);
+      if (images.length) await tx.productImage.createMany({ data: images });
+    }
+
+    if (Array.isArray(deletedVariantIds) && deletedVariantIds.length) {
+      await tx.productVariant.deleteMany({
+        where: {
+          productId: id,
+          id: { in: deletedVariantIds.map(String) },
+          orderItems: { none: {} },
+        },
+      });
+    }
+
+    if (Array.isArray(variants)) {
+      for (const v of variants) {
+        const data = {
+          storage: v.storage || null,
+          color: v.color || null,
+          priceExcellent: Number(v.priceExcellent || 0),
+          priceGood: Number(v.priceGood || 0),
+          priceFair: Number(v.priceFair || 0),
+          stockExcellent: Number(v.stockExcellent || 0),
+          stockGood: Number(v.stockGood || 0),
+          stockFair: Number(v.stockFair || 0),
+        };
+        if (v.id) {
+          await tx.productVariant.updateMany({ where: { id: String(v.id), productId: id }, data });
+        } else {
+          await tx.productVariant.create({ data: { productId: id, ...data } });
+        }
+      }
+    }
+
+    return tx.product.findUnique({
+      where: { id },
+      include: {
+        variants: true,
+        images: { orderBy: { sortOrder: "asc" } },
+      },
+    });
   });
   res.json(product);
 });
