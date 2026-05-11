@@ -220,7 +220,7 @@ export function AccountPage() {
               <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
                 {wishlist.map((p) => (
                   <div key={p.id} className="border border-border rounded bg-white shadow-card p-3 space-y-2">
-                    <ProductCard product={p} />
+                    <ProductCard product={{ ...p, isWishlisted: true }} />
                     <Btn
                       variant="ghost"
                       className="w-full text-red-600"

@@ -29,7 +29,7 @@ export function ProductListPage({ mode = "catalog" }) {
 
   const page = Number(searchParams.get("page") || "1");
   const q = mode === "search" ? searchParams.get("q") || "" : searchParams.get("q") || "";
-  const sort = searchParams.get("sort") || "price_asc";
+  const sort = searchParams.get("sort") || "featured";
 
   const selectedCats = searchParams.get("categories")?.split(",").filter(Boolean) || [];
   const selectedBrands = searchParams.get("brands")?.split(",").filter(Boolean) || [];
@@ -43,23 +43,30 @@ export function ProductListPage({ mode = "catalog" }) {
   const maxPrice = Number(searchParams.get("priceSliderMax") || "250000");
 
   useEffect(() => {
+    let stopped = false;
     Promise.all([
       api.get("/api/categories"),
       api.get("/api/brands"),
     ])
       .then(([c, b]) => {
+        if (stopped) return;
         setCats(c.data);
         setBrnds(b.data);
       })
       .catch(() => {});
+    return () => {
+      stopped = true;
+    };
   }, []);
 
   const queryKey = searchParams.toString();
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     api
       .get("/api/products", {
+        signal: controller.signal,
         params: Object.fromEntries(
           [
             ["page", page],
@@ -78,8 +85,15 @@ export function ProductListPage({ mode = "catalog" }) {
         ),
       })
       .then((r) => setData({ products: r.data.products || [], total: r.data.total || 0 }))
-      .catch(() => setData({ products: [], total: 0 }))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (e.name !== "CanceledError" && e.code !== "ERR_CANCELED") {
+          setData({ products: [], total: 0 });
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [
     queryKey,
     page,
@@ -170,10 +184,11 @@ export function ProductListPage({ mode = "catalog" }) {
 
       <div>
         <p className="font-semibold text-ink mb-2">Price range (KES)</p>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <input
             placeholder="Min"
-            className="flex-1 border border-border rounded px-2 py-1 text-sm"
+            inputMode="numeric"
+            className="min-w-0 w-full border border-border rounded px-2 py-1 text-sm"
             value={priceMin}
             onChange={(e) =>
               updateParam((sp) => {
@@ -186,7 +201,8 @@ export function ProductListPage({ mode = "catalog" }) {
           />
           <input
             placeholder="Max"
-            className="flex-1 border border-border rounded px-2 py-1 text-sm"
+            inputMode="numeric"
+            className="min-w-0 w-full border border-border rounded px-2 py-1 text-sm"
             value={priceMax}
             onChange={(e) =>
               updateParam((sp) => {

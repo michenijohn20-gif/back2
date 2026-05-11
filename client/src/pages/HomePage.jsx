@@ -6,10 +6,10 @@ import { ProductCard } from "../components/ProductCard.jsx";
 import { ProductGridSkeleton } from "../components/SkeletonGrid.jsx";
 
 const trust = [
-  { t: "Tested & Verified", d: "65+ point refurbishment checklist before dispatch." },
-  { t: "M-Pesa Payments", d: "STK Push and card checkout via Paystack at checkout." },
-  { t: "Nairobi Delivery", d: "Same-county Nairobi routes with predictable flat rates." },
-  { t: "12‑Month Warranty", d: "Local warranty honoured by RefurbKE on eligible devices." },
+  { t: "Tested & Verified", d: "Clear grading and device checks before handoff." },
+  { t: "Paystack Checkout", d: "KES card and supported mobile money payments in one secure flow." },
+  { t: "Concierge Sourcing", d: "International refurb options handled through a Kenyan storefront." },
+  { t: "Local Support", d: "Warranty handling and repair coordination through trusted local technicians." },
 ];
 
 const TrustIcon = ({ type }) => {
@@ -87,36 +87,77 @@ export function HomePage() {
 
   return (
     <div>
-      <section className="bg-surface border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 md:py-14 grid lg:grid-cols-2 gap-10 items-center">
-          <div>
-            <h1 className="text-[clamp(1.75rem,2vw+1rem,2.2rem)] font-bold text-ink leading-tight">
-              Trusted refurbished smartphones & laptops priced in Kenyan Shillings
+      <section className="bg-white border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 md:py-14 grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-center">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Refurbished tech, sourced properly</p>
+            <h1 className="mt-3 text-[clamp(1.9rem,2.2vw+1rem,2.75rem)] font-bold text-ink leading-tight">
+              Premium phones and laptops, priced clearly for Kenya.
             </h1>
             <p className="mt-4 text-body text-[15px] max-w-xl">
-              RefurbKE sources tested devices comparable to certified refurb standards, optimised for Kenyan
-              power, networks, and delivery realities—without overseas markups priced in euros.
+              RefurbKE keeps the storefront simple: compare clean refurb grades, pay in KES, and let us handle
+              sourcing, freight, customs updates, and local fulfilment.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <BtnLink to="/products">Browse deals</BtnLink>
-              <Btn variant="secondary" onClick={() => (window.location.href = "/products?categories=gaming")}>
-                Shop gaming rigs
+              <BtnLink to="/products">Browse catalogue</BtnLink>
+              <Btn variant="secondary" onClick={() => (window.location.href = "/products?sort=newest")}>
+                New arrivals
               </Btn>
             </div>
+            <div className="mt-7 grid grid-cols-3 gap-3 max-w-lg">
+              {["KES checkout", "24h inspection", "Local support"].map((label) => (
+                <div key={label} className="border-t border-border pt-3">
+                  <p className="text-sm font-semibold text-ink">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="bg-white rounded border border-border shadow-card p-4 max-w-md mx-auto w-full">
-            <p className="text-sm text-muted uppercase tracking-wide mb-3">Featured right now</p>
-            {!loading && featured[0] ? (
-              <ProductCard product={featured[0]} dense />
+          <div className="w-full">
+            {!loading && featured.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <ProductCard product={featured[0]} dense />
+                </div>
+                <div className="grid gap-3">
+                  {featured.slice(1, 3).map((p) => (
+                    <Link
+                      key={p.id}
+                      to={`/products/${p.slug}`}
+                      className="flex gap-3 rounded border border-border bg-white p-3 shadow-card hover:border-primary transition"
+                    >
+                      <img
+                        src={p.images?.[0]?.url || "/placeholder.svg"}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="h-20 w-20 rounded object-cover bg-surface border border-border"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs text-muted">{p.brand?.name}</p>
+                        <p className="text-sm font-semibold text-ink line-clamp-2">{p.name}</p>
+                        <p className="text-xs text-primary font-semibold mt-1">View details</p>
+                      </div>
+                    </Link>
+                  ))}
+                  <Link
+                    to="/products"
+                    className="rounded border border-dashed border-border bg-surface px-4 py-5 text-sm font-semibold text-ink hover:border-primary transition"
+                  >
+                    See every available refurb unit
+                  </Link>
+                </div>
+              </div>
             ) : !loading ? (
-              <div className="h-72 flex flex-col items-center justify-center gap-2 text-muted text-sm px-4 text-center">
+              <div className="min-h-72 flex flex-col items-center justify-center gap-2 border border-border rounded bg-surface text-muted text-sm px-4 text-center">
                 <p>No catalogue items yet, or the API is not reachable.</p>
                 <Link to="/products" className="text-primary font-medium hover:underline">
                   Open all products
                 </Link>
               </div>
             ) : (
-              <div className="h-72 flex items-center justify-center text-muted">Loading…</div>
+              <div className="min-h-72 flex items-center justify-center border border-border rounded bg-surface text-muted">
+                Loading...
+              </div>
             )}
           </div>
         </div>
@@ -200,9 +241,9 @@ export function HomePage() {
           </div>
           <div className="border border-border rounded bg-white shadow-card p-5">
             <p className="text-primary font-semibold text-sm mb-2">Step 2</p>
-            <h3 className="text-lg text-ink font-semibold mb-2">Order & pay via M-Pesa</h3>
+            <h3 className="text-lg text-ink font-semibold mb-2">Order & pay with Paystack</h3>
             <p className="text-sm text-muted">
-              Choose STK Push to your Kenyan line or Paystack checkout for Mastercard and Visa rails.
+              Complete one secure Paystack checkout for supported card and mobile money options.
             </p>
           </div>
           <div className="border border-border rounded bg-white shadow-card p-5">

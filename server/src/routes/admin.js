@@ -172,6 +172,8 @@ router.get("/orders", async (req, res) => {
         guestName: true,
         guestEmail: true,
         guestPhone: true,
+        deliveryCounty: true,
+        deliveryTown: true,
         totalAmount: true,
         paymentStatus: true,
         fulfillmentStatus: true,

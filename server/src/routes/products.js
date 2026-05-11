@@ -189,16 +189,57 @@ router.get("/", asyncHandler(async (req, res) => {
   else orderBy = { createdAt: "desc" }; // placeholder; price sorts happen in-memory below
 
   const priceSort = sort === "price_asc" || sort === "price_desc";
-  const [total, rows] = await prisma.$transaction([
-    prisma.product.count({ where }),
-    prisma.product.findMany({
+  let total;
+  let rows;
+
+  if (priceSort) {
+    const matches = await prisma.product.findMany({
       where,
-      skip: priceSort ? undefined : skip,
-      take: priceSort ? undefined : take,
-      orderBy,
-      select: productCardSelect,
-    }),
-  ]);
+      select: {
+        id: true,
+        variants: {
+          select: {
+            id: true,
+            priceExcellent: true,
+            priceGood: true,
+            priceFair: true,
+            stockExcellent: true,
+            stockGood: true,
+            stockFair: true,
+          },
+        },
+      },
+    });
+    total = matches.length;
+    const pageIds = matches
+      .map((product) => ({
+        id: product.id,
+        price: cheapestListingOption(product.variants || [])?.price || 0,
+      }))
+      .sort((a, b) => (sort === "price_asc" ? a.price - b.price : b.price - a.price))
+      .slice(skip, skip + take)
+      .map((product) => product.id);
+
+    const pageRows = pageIds.length
+      ? await prisma.product.findMany({
+          where: { id: { in: pageIds } },
+          select: productCardSelect,
+        })
+      : [];
+    const byId = new Map(pageRows.map((product) => [product.id, product]));
+    rows = pageIds.map((id) => byId.get(id)).filter(Boolean);
+  } else {
+    [total, rows] = await prisma.$transaction([
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        where,
+        skip,
+        take,
+        orderBy,
+        select: productCardSelect,
+      }),
+    ]);
+  }
 
   const products = rows.map((row) => {
     const p = normalizeProductImages(row);
@@ -228,7 +269,7 @@ router.get("/", asyncHandler(async (req, res) => {
     products.sort((a, b) => b.displayPrice - a.displayPrice);
   }
 
-  const pagedProducts = priceSort ? products.slice(skip, skip + take) : products;
+  const pagedProducts = products;
 
   res.json({ total, page: Number(page), pageSize: take, products: pagedProducts });
 }));

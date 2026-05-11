@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Btn } from "./ui.jsx";
 import { ConditionBadge } from "./ui.jsx";
@@ -26,7 +27,9 @@ export function ProductCard({
 }) {
   const image = product.images?.[0]?.url;
   const addItem = useCartStore((s) => s.addItem);
-  const auth = useAuthStore((s) => s.accessToken);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const [wishlisted, setWishlisted] = useState(Boolean(product.isWishlisted));
+  const [wishBusy, setWishBusy] = useState(false);
 
   const displayPrice =
     typeof product.displayPrice === "number" && product.displayPrice > 0
@@ -42,14 +45,30 @@ export function ProductCard({
     [defaultVariant?.storage, defaultVariant?.color].filter(Boolean).join(" · ");
 
   const handleWish = async () => {
+    if (wishBusy) return;
     try {
-      if (!auth) {
+      if (!accessToken) {
         window.alert("Login to save favourites.");
         return;
       }
-      await api.post(`/api/wishlist/${product.id}`);
+      setWishBusy(true);
+      if (wishlisted) {
+        await api.delete(`/api/wishlist/${product.id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        setWishlisted(false);
+      } else {
+        await api.post(
+          `/api/wishlist/${product.id}`,
+          {},
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+        setWishlisted(true);
+      }
     } catch {
       window.alert("Could not update wishlist.");
+    } finally {
+      setWishBusy(false);
     }
   };
 
@@ -86,6 +105,7 @@ export function ProductCard({
       <Link to={`/products/${product.slug}`} className="relative block aspect-square sm:aspect-[4/3] bg-surface">
         <img
           loading="lazy"
+          decoding="async"
           src={image || "/placeholder.svg"}
           alt={product.name}
           className="w-full h-full object-cover rounded-t"
@@ -95,12 +115,16 @@ export function ProductCard({
           type="button"
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             handleWish();
           }}
-          className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 p-1.5 sm:p-2 rounded-full bg-white/90 border border-border text-muted hover:text-primary"
-          aria-label="Wishlist"
+          className={`absolute top-1.5 right-1.5 sm:top-2 sm:right-2 p-1.5 sm:p-2 rounded-full bg-white/90 border border-border hover:text-primary ${
+            wishlisted ? "text-primary" : "text-muted"
+          }`}
+          aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          disabled={wishBusy}
         >
-          {heartIcon(false)}
+          {heartIcon(wishlisted)}
         </button>
       </Link>
       <div className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5 sm:gap-2">

@@ -55,6 +55,7 @@ async function syncPaystackOrder(order, reference) {
   if (kind === "paid") {
     await markOrderPaid(order.id, {
       pesapalOrderId: reference,
+      fulfillmentStatus: OrderFulfillmentStatus.PROCESSING,
     });
   } else if (kind === "failed") {
     await prisma.order.update({
@@ -73,6 +74,18 @@ async function syncPaystackOrder(order, reference) {
   }
 
   return { kind, tx };
+}
+
+function paystackOrderIdFromMetadata(metadata) {
+  if (!metadata) return null;
+  if (typeof metadata === "string") {
+    try {
+      return paystackOrderIdFromMetadata(JSON.parse(metadata));
+    } catch {
+      return null;
+    }
+  }
+  return metadata.order_id || metadata.orderId || metadata.orderID || null;
 }
 
 function getDarajaResultCode(resp) {
@@ -330,10 +343,10 @@ router.post("/paystack/create", async (req, res) => {
         currency: process.env.PAYSTACK_CURRENCY || "KES",
         reference,
         callback_url: callbackUrl,
-        channels: ["card"],
+        channels: ["card", "mobile_money"],
         metadata: {
-          orderId: order.id,
-          orderNumber: order.orderNumber,
+          order_id: order.id,
+          order_number: order.orderNumber,
           customerName: order.guestName || order.user?.fullName || "",
           phone: order.guestPhone || "",
         },
@@ -358,6 +371,54 @@ router.post("/paystack/create", async (req, res) => {
     console.error("paystack:", e.response?.data || e.message);
     res.status(500).json({
       error: e.response?.data?.message || e.message || "Paystack order failed",
+    });
+  }
+});
+
+router.post("/paystack/confirm", async (req, res) => {
+  const { orderId, reference } = req.body || {};
+  if (!orderId || !reference) {
+    return res.status(400).json({ error: "orderId and reference are required" });
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: String(orderId) },
+    include: { user: true },
+  });
+  if (!order) return res.status(404).json({ error: "Order not found" });
+  if (order.paymentStatus === PaymentStatus.PAID) {
+    return res.json({ status: "paid", order });
+  }
+
+  try {
+    const tx = await verifyPaystackReference(String(reference));
+    const kind = paystackStatusKind(tx);
+    const metadataOrderId = paystackOrderIdFromMetadata(tx?.metadata);
+    const amountOk = Number(tx?.amount) === Math.round(Number(order.totalAmount) * 100);
+    const currencyOk = String(tx?.currency || "").toUpperCase() === String(process.env.PAYSTACK_CURRENCY || "KES").toUpperCase();
+
+    if (metadataOrderId && String(metadataOrderId) !== order.id) {
+      return res.status(400).json({ error: "Payment reference does not match this order" });
+    }
+    if (!amountOk || !currencyOk) {
+      return res.status(400).json({ error: "Payment amount or currency does not match this order" });
+    }
+    if (kind !== "paid") {
+      return res.status(400).json({
+        error: tx?.gateway_response || tx?.message || "Payment has not been confirmed by Paystack",
+        status: kind,
+      });
+    }
+
+    const paid = await markOrderPaid(order.id, {
+      pesapalOrderId: String(reference),
+      fulfillmentStatus: OrderFulfillmentStatus.PROCESSING,
+    });
+    res.json({ status: "paid", order: paid });
+  } catch (e) {
+    console.error("paystack confirm:", e.response?.data || e.message);
+    res.status(500).json({
+      error: e.response?.data?.message || e.message || "Could not verify Paystack payment",
     });
   }
 });
@@ -404,7 +465,10 @@ router.post("/paystack/webhook", async (req, res) => {
   if (event.event !== "charge.success" || !reference) return;
 
   try {
-    const ord = await prisma.order.findFirst({ where: { pesapalOrderId: String(reference) } });
+    const metadataOrderId = paystackOrderIdFromMetadata(event?.data?.metadata);
+    const ord = metadataOrderId
+      ? await prisma.order.findUnique({ where: { id: String(metadataOrderId) } })
+      : await prisma.order.findFirst({ where: { pesapalOrderId: String(reference) } });
     if (ord) await syncPaystackOrder(ord, String(reference));
   } catch (e) {
     console.error("paystack webhook:", e.response?.data || e.message);
