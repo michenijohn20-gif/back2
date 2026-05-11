@@ -33,13 +33,7 @@ export function ProductCard({
       ? product.displayPrice
       : pickDisplayPrice(product, condition);
 
-  const defaultVariant =
-    product.variants?.find(
-      (v) =>
-        (condition === "EXCELLENT" && v.stockExcellent > 0) ||
-        (condition === "GOOD" && v.stockGood > 0) ||
-        (condition === "FAIR" && v.stockFair > 0),
-    ) || product.variants?.[0];
+  const defaultVariant = pickCheapestVariant(product, condition);
 
   const spec =
     product.specLine ||
@@ -141,6 +135,22 @@ function pickDisplayPrice(product, condition) {
     if (p < min) min = p;
   }
   return Number.isFinite(min) ? min : 0;
+}
+
+function pickCheapestVariant(product, condition) {
+  const variants = product.variants || [];
+  const sorted = [...variants].sort((a, b) => priceFor(a, condition) - priceFor(b, condition));
+  return sorted.find((v) => stockFor(v, condition) > 0) || sorted[0];
+}
+
+function stockFor(variant, condition) {
+  if (!variant) return 0;
+  const c = String(condition || "EXCELLENT").toUpperCase();
+  return c === "GOOD"
+    ? variant.stockGood
+    : c === "FAIR"
+      ? variant.stockFair
+      : variant.stockExcellent;
 }
 
 export function priceFor(variant, condition) {

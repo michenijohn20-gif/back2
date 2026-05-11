@@ -29,7 +29,7 @@ export function ProductListPage({ mode = "catalog" }) {
 
   const page = Number(searchParams.get("page") || "1");
   const q = mode === "search" ? searchParams.get("q") || "" : searchParams.get("q") || "";
-  const sort = searchParams.get("sort") || "featured";
+  const sort = searchParams.get("sort") || "price_asc";
 
   const selectedCats = searchParams.get("categories")?.split(",").filter(Boolean) || [];
   const selectedBrands = searchParams.get("brands")?.split(",").filter(Boolean) || [];

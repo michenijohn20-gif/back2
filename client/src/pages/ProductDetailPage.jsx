@@ -26,6 +26,10 @@ const CONDITION_GUIDE = [
   },
 ];
 
+function uniqueOptions(rows, key) {
+  return [...new Set((rows || []).map((row) => String(row?.[key] || "").trim()).filter(Boolean))];
+}
+
 export function ProductDetailPage() {
   const { slug } = useParams();
   const [detail, setDetail] = useState(null);
@@ -112,6 +116,25 @@ export function ProductDetailPage() {
     setVariantId(v.id);
     setActiveImg(0);
   }
+
+  function selectStorage(storage) {
+    const variants = p.variants || [];
+    const next =
+      variants.find((v) => v.storage === storage && v.color === variant?.color) ||
+      variants.find((v) => v.storage === storage);
+    if (next) selectVariant(next);
+  }
+
+  function selectColor(color) {
+    const variants = p.variants || [];
+    const next =
+      variants.find((v) => v.color === color && v.storage === variant?.storage) ||
+      variants.find((v) => v.color === color);
+    if (next) selectVariant(next);
+  }
+
+  const storageOptions = uniqueOptions(p.variants, "storage");
+  const colorOptions = uniqueOptions(p.variants, "color");
 
   return (
     <>
@@ -210,23 +233,44 @@ export function ProductDetailPage() {
               {CONDITION_GUIDE.find((c) => c.key === condition)?.copy}
             </p>
             <p className="text-3xl font-bold text-ink">{formatKes(price)}</p>
-            <div>
-              <p className="text-sm font-semibold text-ink mb-2">Storage & colour</p>
-              <div className="flex flex-wrap gap-2">
-                {p.variants.map((v) => (
-                  <button
-                    type="button"
-                    key={v.id}
-                    onClick={() => selectVariant(v)}
-                    className={`px-3 py-2 border rounded-full text-sm ${
-                      variantId === v.id ? "border-primary text-primary bg-white" : "border-border bg-white"
-                    }`}
-                  >
-                    {[v.storage, v.color].filter(Boolean).join(" · ") || "Standard"}
-                  </button>
-                ))}
+            {storageOptions.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold text-ink mb-2">Storage</p>
+                <div className="flex flex-wrap gap-2">
+                  {storageOptions.map((storage) => (
+                    <button
+                      type="button"
+                      key={storage}
+                      onClick={() => selectStorage(storage)}
+                      className={`px-3 py-2 border rounded-full text-sm ${
+                        variant?.storage === storage ? "border-primary text-primary bg-white" : "border-border bg-white"
+                      }`}
+                    >
+                      {storage}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+            {colorOptions.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold text-ink mb-2">Colour</p>
+                <div className="flex flex-wrap gap-2">
+                  {colorOptions.map((color) => (
+                    <button
+                      type="button"
+                      key={color}
+                      onClick={() => selectColor(color)}
+                      className={`px-3 py-2 border rounded-full text-sm ${
+                        variant?.color === color ? "border-primary text-primary bg-white" : "border-border bg-white"
+                      }`}
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm">
               <span className={`font-semibold ${stock > 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {stock > 0 ? `${stock} in stock` : "Out of stock in this grade"}

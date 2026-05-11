@@ -26,6 +26,25 @@ function normalizeProductImages(product) {
   };
 }
 
+function priceForCondition(variant, condition) {
+  if (!variant) return 0;
+  const cond = String(condition || "EXCELLENT").toUpperCase();
+  return cond === "GOOD" ? variant.priceGood : cond === "FAIR" ? variant.priceFair : variant.priceExcellent;
+}
+
+function stockForCondition(variant, condition) {
+  if (!variant) return 0;
+  const cond = String(condition || "EXCELLENT").toUpperCase();
+  return cond === "GOOD" ? variant.stockGood : cond === "FAIR" ? variant.stockFair : variant.stockExcellent;
+}
+
+function cheapestVariantForCondition(variants = [], condition) {
+  return [...variants]
+    .filter((v) => stockForCondition(v, condition) > 0)
+    .sort((a, b) => priceForCondition(a, condition) - priceForCondition(b, condition))[0] ||
+    [...variants].sort((a, b) => priceForCondition(a, condition) - priceForCondition(b, condition))[0];
+}
+
 const productCardSelect = {
   id: true,
   name: true,
@@ -149,12 +168,13 @@ router.get("/", asyncHandler(async (req, res) => {
   else if (sort === "featured" || sort === "") orderBy = [{ featured: "desc" }, { createdAt: "desc" }];
   else orderBy = { createdAt: "desc" }; // placeholder; price sorts happen in-memory below
 
+  const priceSort = sort === "price_asc" || sort === "price_desc";
   const [total, rows] = await prisma.$transaction([
     prisma.product.count({ where }),
     prisma.product.findMany({
       where,
-      skip,
-      take,
+      skip: priceSort ? undefined : skip,
+      take: priceSort ? undefined : take,
       orderBy,
       select: productCardSelect,
     }),
@@ -176,10 +196,12 @@ router.get("/", asyncHandler(async (req, res) => {
       }
       if (st > 0) anyStock = true;
     }
-    const defaultVariant = variants[0];
+    const sortedVariants = [...variants].sort((a, b) => priceForCondition(a, cond) - priceForCondition(b, cond));
+    const defaultVariant = cheapestVariantForCondition(sortedVariants, cond);
     const specLine = [defaultVariant?.storage, defaultVariant?.color].filter(Boolean).join(" · ");
     return {
       ...p,
+      variants: sortedVariants,
       displayPrice: Number.isFinite(minP) ? minP : 0,
       displayPriceMax: Number.isFinite(maxP) ? maxP : 0,
       specLine,
@@ -193,7 +215,9 @@ router.get("/", asyncHandler(async (req, res) => {
     products.sort((a, b) => b.displayPrice - a.displayPrice);
   }
 
-  res.json({ total, page: Number(page), pageSize: take, products });
+  const pagedProducts = priceSort ? products.slice(skip, skip + take) : products;
+
+  res.json({ total, page: Number(page), pageSize: take, products: pagedProducts });
 }));
 
 router.get(
@@ -222,8 +246,13 @@ router.get(
       select: productCardSelect,
     });
 
+    const normalizedProduct = normalizeProductImages(product);
+    normalizedProduct.variants = [...(normalizedProduct.variants || [])].sort(
+      (a, b) => priceForCondition(a, "EXCELLENT") - priceForCondition(b, "EXCELLENT"),
+    );
+
     res.json({
-      product: normalizeProductImages(product),
+      product: normalizedProduct,
       related: related.map(normalizeProductImages),
     });
   }),
