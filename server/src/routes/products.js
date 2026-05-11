@@ -38,11 +38,31 @@ function stockForCondition(variant, condition) {
   return cond === "GOOD" ? variant.stockGood : cond === "FAIR" ? variant.stockFair : variant.stockExcellent;
 }
 
-function cheapestVariantForCondition(variants = [], condition) {
-  return [...variants]
-    .filter((v) => stockForCondition(v, condition) > 0)
-    .sort((a, b) => priceForCondition(a, condition) - priceForCondition(b, condition))[0] ||
-    [...variants].sort((a, b) => priceForCondition(a, condition) - priceForCondition(b, condition))[0];
+function listingPriceOptions(variants = []) {
+  return variants.flatMap((variant) =>
+    ["EXCELLENT", "GOOD", "FAIR"].map((condition) => ({
+      variant,
+      condition,
+      price: priceForCondition(variant, condition),
+      stock: stockForCondition(variant, condition),
+    })),
+  );
+}
+
+function cheapestListingOption(variants = []) {
+  const options = listingPriceOptions(variants).filter((option) => option.price > 0);
+  return (
+    options
+      .filter((option) => option.stock > 0)
+      .sort((a, b) => a.price - b.price)[0] || options.sort((a, b) => a.price - b.price)[0]
+  );
+}
+
+function maxListingPrice(variants = []) {
+  const options = listingPriceOptions(variants).filter((option) => option.price > 0);
+  const stockedOptions = options.filter((option) => option.stock > 0);
+  const source = stockedOptions.length ? stockedOptions : options;
+  return source.reduce((max, option) => Math.max(max, option.price), 0);
 }
 
 const productCardSelect = {
@@ -180,32 +200,25 @@ router.get("/", asyncHandler(async (req, res) => {
     }),
   ]);
 
-  const cond = String(condition || "EXCELLENT").toUpperCase();
   const products = rows.map((row) => {
     const p = normalizeProductImages(row);
     const variants = p.variants || [];
-    let minP = Infinity;
-    let maxP = -Infinity;
-    let anyStock = false;
-    for (const v of variants) {
-      const pr = cond === "GOOD" ? v.priceGood : cond === "FAIR" ? v.priceFair : v.priceExcellent;
-      const st = cond === "GOOD" ? v.stockGood : cond === "FAIR" ? v.stockFair : v.stockExcellent;
-      if (typeof pr === "number") {
-        minP = Math.min(minP, pr);
-        maxP = Math.max(maxP, pr);
-      }
-      if (st > 0) anyStock = true;
-    }
-    const sortedVariants = [...variants].sort((a, b) => priceForCondition(a, cond) - priceForCondition(b, cond));
-    const defaultVariant = cheapestVariantForCondition(sortedVariants, cond);
+    const cheapest = cheapestListingOption(variants);
+    const sortedVariants = [...variants].sort((a, b) => {
+      const aPrice = cheapestListingOption([a])?.price || 0;
+      const bPrice = cheapestListingOption([b])?.price || 0;
+      return aPrice - bPrice;
+    });
+    const defaultVariant = cheapest?.variant || sortedVariants[0];
     const specLine = [defaultVariant?.storage, defaultVariant?.color].filter(Boolean).join(" · ");
     return {
       ...p,
       variants: sortedVariants,
-      displayPrice: Number.isFinite(minP) ? minP : 0,
-      displayPriceMax: Number.isFinite(maxP) ? maxP : 0,
+      displayPrice: cheapest?.price || 0,
+      displayCondition: cheapest?.condition || "EXCELLENT",
+      displayPriceMax: maxListingPrice(variants),
       specLine,
-      inStockAggregate: anyStock,
+      inStockAggregate: listingPriceOptions(variants).some((option) => option.stock > 0),
     };
   });
 

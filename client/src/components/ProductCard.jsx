@@ -31,9 +31,11 @@ export function ProductCard({
   const displayPrice =
     typeof product.displayPrice === "number" && product.displayPrice > 0
       ? product.displayPrice
-      : pickDisplayPrice(product, condition);
+      : pickDisplayPrice(product);
 
-  const defaultVariant = pickCheapestVariant(product, condition);
+  const cheapestOption = pickCheapestOption(product);
+  const defaultVariant = cheapestOption?.variant || product.variants?.[0];
+  const itemCondition = product.displayCondition || cheapestOption?.condition || condition;
 
   const spec =
     product.specLine ||
@@ -51,7 +53,7 @@ export function ProductCard({
     }
   };
 
-  const unit = priceFor(defaultVariant, condition);
+  const unit = priceFor(defaultVariant, itemCondition);
 
   const handleCart = () => {
     if (!defaultVariant?.id) return;
@@ -59,7 +61,7 @@ export function ProductCard({
     fn({
       productId: product.id,
       variantId: defaultVariant?.id,
-      condition,
+      condition: itemCondition,
       name: `${product.brand?.name ? product.brand.name + " · " : ""}${product.name}`,
       image,
       spec,
@@ -68,8 +70,7 @@ export function ProductCard({
     });
   };
 
-  const price =
-    typeof displayPrice === "number" && displayPrice > 0 ? displayPrice : unit;
+  const price = typeof displayPrice === "number" && displayPrice > 0 ? displayPrice : unit;
 
   const handleImgFallback = (e) => {
     e.currentTarget.onerror = null;
@@ -104,7 +105,7 @@ export function ProductCard({
       </Link>
       <div className="p-2.5 sm:p-3 flex flex-col flex-1 gap-1.5 sm:gap-2">
         <div className="flex items-start justify-between gap-2">
-          <ConditionBadge condition={condition} />
+          <ConditionBadge condition={itemCondition} />
         </div>
         <Link to={`/products/${product.slug}`} className="text-ink hover:text-primary">
           <p className="text-[13px] sm:text-sm font-semibold leading-snug line-clamp-2">
@@ -113,7 +114,7 @@ export function ProductCard({
           </p>
         </Link>
         {spec && <p className="text-xs sm:text-sm text-muted line-clamp-1">{spec}</p>}
-        <p className="text-sm sm:text-lg font-semibold text-ink mt-auto">{formatKes(price)}</p>
+        <p className="text-sm sm:text-lg font-semibold text-ink mt-auto">From {formatKes(price)}</p>
         <Btn
           className="w-full px-2 py-1.5 sm:px-4 sm:py-2.5 text-xs sm:text-[15px]"
           disabled={!defaultVariant?.id}
@@ -126,21 +127,24 @@ export function ProductCard({
   );
 }
 
-function pickDisplayPrice(product, condition) {
-  const cond = condition || "EXCELLENT";
-  const variants = product.variants || [];
-  let min = Infinity;
-  for (const v of variants) {
-    const p = priceFor(v, cond);
-    if (p < min) min = p;
-  }
-  return Number.isFinite(min) ? min : 0;
+function pickDisplayPrice(product) {
+  return pickCheapestOption(product)?.price || 0;
 }
 
-function pickCheapestVariant(product, condition) {
-  const variants = product.variants || [];
-  const sorted = [...variants].sort((a, b) => priceFor(a, condition) - priceFor(b, condition));
-  return sorted.find((v) => stockFor(v, condition) > 0) || sorted[0];
+function pickCheapestOption(product) {
+  const options = (product.variants || []).flatMap((variant) =>
+    ["EXCELLENT", "GOOD", "FAIR"].map((condition) => ({
+      variant,
+      condition,
+      price: priceFor(variant, condition),
+      stock: stockFor(variant, condition),
+    })),
+  ).filter((option) => option.price > 0);
+  return (
+    options
+      .filter((option) => option.stock > 0)
+      .sort((a, b) => a.price - b.price)[0] || options.sort((a, b) => a.price - b.price)[0]
+  );
 }
 
 function stockFor(variant, condition) {
