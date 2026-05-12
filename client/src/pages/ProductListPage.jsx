@@ -19,137 +19,24 @@ const CONDITIONS = [
   { value: "FAIR", label: "Fair" },
 ];
 
-export function ProductListPage({ mode = "catalog" }) {
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [cats, setCats] = useState([]);
-  const [brnds, setBrnds] = useState([]);
-  const [data, setData] = useState({ products: [], total: 0 });
-  const [loading, setLoading] = useState(true);
-  const [drawer, setDrawer] = useState(false);
-
-  const page = Number(searchParams.get("page") || "1");
-  const q = mode === "search" ? searchParams.get("q") || "" : searchParams.get("q") || "";
-  const sort = searchParams.get("sort") || "featured";
-
-  const selectedCats = searchParams.get("categories")?.split(",").filter(Boolean) || [];
-  const selectedBrands = searchParams.get("brands")?.split(",").filter(Boolean) || [];
-  const condition = searchParams.get("condition") || "EXCELLENT";
-  const priceMin = searchParams.get("priceMin") || "";
-  const priceMax = searchParams.get("priceMax") || "";
-  const storageFilter = searchParams.get("storage") || "";
-  const colorFilter = searchParams.get("color") || "";
-  const inStock = searchParams.get("inStock") || "";
-
-  const maxPrice = Number(searchParams.get("priceSliderMax") || "250000");
-
-  useEffect(() => {
-    let stopped = false;
-    const cachedCats = readSessionCache("catalog:categories", 5 * 60_000);
-    const cachedBrands = readSessionCache("catalog:brands", 5 * 60_000);
-    if (cachedCats) setCats(cachedCats);
-    if (cachedBrands) setBrnds(cachedBrands);
-
-    Promise.all([
-      api.get("/api/categories"),
-      api.get("/api/brands"),
-    ])
-      .then(([c, b]) => {
-        if (stopped) return;
-        setCats(c.data || []);
-        setBrnds(b.data || []);
-        writeSessionCache("catalog:categories", c.data || []);
-        writeSessionCache("catalog:brands", b.data || []);
-      })
-      .catch(() => {});
-    return () => {
-      stopped = true;
-    };
-  }, []);
-
-  const queryKey = searchParams.toString();
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const params = Object.fromEntries(
-      [
-        ["page", page],
-        ["pageSize", 12],
-        ["sort", sort],
-        ["condition", condition],
-        ["priceMin", priceMin],
-        ["priceMax", priceMax],
-        ["storage", storageFilter],
-        ["color", colorFilter],
-        ["inStock", inStock === "true" ? "true" : ""],
-        ["categories", selectedCats.join(",")],
-        ["brands", selectedBrands.join(",")],
-        ["q", q],
-      ].filter(([, v]) => v !== "" && v != null),
-    );
-    const key = cacheKey("catalog:products", params);
-    const cached = readSessionCache(key, 45_000);
-    if (cached) {
-      setData(cached);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-
-    api
-      .get("/api/products", {
-        signal: controller.signal,
-        params,
-      })
-      .then((r) => {
-        const next = { products: r.data.products || [], total: r.data.total || 0 };
-        writeSessionCache(key, next);
-        setData(next);
-      })
-      .catch((e) => {
-        if (e.name !== "CanceledError" && e.code !== "ERR_CANCELED") {
-          setData({ products: [], total: 0 });
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [
-    queryKey,
-    page,
-    sort,
-    condition,
-    priceMin,
-    priceMax,
-    storageFilter,
-    colorFilter,
-    inStock,
-    selectedCats.join(","),
-    selectedBrands.join(","),
-    q,
-  ]);
-
-  const totalPages = Math.max(1, Math.ceil(data.total / 12));
-
-  const updateParam = (mutator) => {
-    const next = new URLSearchParams(searchParams);
-    mutator(next);
-    setSearchParams(next);
-  };
-
-  const toggleSlug = (key, slug) => {
-    updateParam((sp) => {
-      const raw = sp.get(key)?.split(",").filter(Boolean) || [];
-      const has = raw.includes(slug);
-      const n = has ? raw.filter((x) => x !== slug) : [...raw, slug];
-      if (n.length) sp.set(key, n.join(","));
-      else sp.delete(key);
-      sp.delete("page");
-    });
-  };
-
-  const Sidebar = ({ mobile }) => (
+function FilterSidebar({
+  mobile,
+  cats,
+  brnds,
+  selectedCats,
+  selectedBrands,
+  condition,
+  priceMin,
+  priceMax,
+  storageFilter,
+  colorFilter,
+  inStock,
+  maxPrice,
+  updateParam,
+  toggleSlug,
+  clearFilters,
+}) {
+  return (
     <div className={`${mobile ? "p-4" : "p-5"} space-y-6`}>
       <div>
         <p className="font-semibold text-ink mb-2">Category</p>
@@ -307,12 +194,160 @@ export function ProductListPage({ mode = "catalog" }) {
       <Btn
         variant="secondary"
         className="w-full"
-        onClick={() => setSearchParams(new URLSearchParams())}
+        onClick={clearFilters}
       >
         Clear filters
       </Btn>
     </div>
   );
+}
+
+export function ProductListPage({ mode = "catalog" }) {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [cats, setCats] = useState([]);
+  const [brnds, setBrnds] = useState([]);
+  const [data, setData] = useState({ products: [], total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [drawer, setDrawer] = useState(false);
+
+  const page = Number(searchParams.get("page") || "1");
+  const q = mode === "search" ? searchParams.get("q") || "" : searchParams.get("q") || "";
+  const sort = searchParams.get("sort") || "featured";
+
+  const selectedCats = searchParams.get("categories")?.split(",").filter(Boolean) || [];
+  const selectedBrands = searchParams.get("brands")?.split(",").filter(Boolean) || [];
+  const condition = searchParams.get("condition") || "EXCELLENT";
+  const priceMin = searchParams.get("priceMin") || "";
+  const priceMax = searchParams.get("priceMax") || "";
+  const storageFilter = searchParams.get("storage") || "";
+  const colorFilter = searchParams.get("color") || "";
+  const inStock = searchParams.get("inStock") || "";
+
+  const maxPrice = Number(searchParams.get("priceSliderMax") || "250000");
+
+  useEffect(() => {
+    let stopped = false;
+    const cachedCats = readSessionCache("catalog:categories", 5 * 60_000);
+    const cachedBrands = readSessionCache("catalog:brands", 5 * 60_000);
+    if (cachedCats) setCats(cachedCats);
+    if (cachedBrands) setBrnds(cachedBrands);
+
+    Promise.all([
+      api.get("/api/categories"),
+      api.get("/api/brands"),
+    ])
+      .then(([c, b]) => {
+        if (stopped) return;
+        setCats(c.data || []);
+        setBrnds(b.data || []);
+        writeSessionCache("catalog:categories", c.data || []);
+        writeSessionCache("catalog:brands", b.data || []);
+      })
+      .catch(() => {});
+    return () => {
+      stopped = true;
+    };
+  }, []);
+
+  const queryKey = searchParams.toString();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = Object.fromEntries(
+      [
+        ["page", page],
+        ["pageSize", 12],
+        ["sort", sort],
+        ["condition", condition],
+        ["priceMin", priceMin],
+        ["priceMax", priceMax],
+        ["storage", storageFilter],
+        ["color", colorFilter],
+        ["inStock", inStock === "true" ? "true" : ""],
+        ["categories", selectedCats.join(",")],
+        ["brands", selectedBrands.join(",")],
+        ["q", q],
+      ].filter(([, v]) => v !== "" && v != null),
+    );
+    const key = cacheKey("catalog:products", params);
+    const cached = readSessionCache(key, 45_000);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    api
+      .get("/api/products", {
+        signal: controller.signal,
+        params,
+      })
+      .then((r) => {
+        const next = { products: r.data.products || [], total: r.data.total || 0 };
+        writeSessionCache(key, next);
+        setData(next);
+      })
+      .catch((e) => {
+        if (e.name !== "CanceledError" && e.code !== "ERR_CANCELED") {
+          setData({ products: [], total: 0 });
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    queryKey,
+    page,
+    sort,
+    condition,
+    priceMin,
+    priceMax,
+    storageFilter,
+    colorFilter,
+    inStock,
+    selectedCats.join(","),
+    selectedBrands.join(","),
+    q,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(data.total / 12));
+
+  const updateParam = (mutator) => {
+    const next = new URLSearchParams(searchParams);
+    mutator(next);
+    setSearchParams(next);
+  };
+
+  const toggleSlug = (key, slug) => {
+    updateParam((sp) => {
+      const raw = sp.get(key)?.split(",").filter(Boolean) || [];
+      const has = raw.includes(slug);
+      const n = has ? raw.filter((x) => x !== slug) : [...raw, slug];
+      if (n.length) sp.set(key, n.join(","));
+      else sp.delete(key);
+      sp.delete("page");
+    });
+  };
+
+  const filterSidebarProps = {
+    cats,
+    brnds,
+    selectedCats,
+    selectedBrands,
+    condition,
+    priceMin,
+    priceMax,
+    storageFilter,
+    colorFilter,
+    inStock,
+    maxPrice,
+    updateParam,
+    toggleSlug,
+    clearFilters: () => setSearchParams(new URLSearchParams()),
+  };
 
   const title = useMemo(() => {
     if (mode === "search") {
@@ -366,7 +401,7 @@ export function ProductListPage({ mode = "catalog" }) {
 
       <div className="flex gap-8">
         <aside className="hidden lg:block w-72 shrink-0 border border-border rounded bg-white shadow-card self-start">
-          <Sidebar />
+          <FilterSidebar {...filterSidebarProps} />
         </aside>
         <div className="flex-1 space-y-4">
           {loading ? (
@@ -424,7 +459,7 @@ export function ProductListPage({ mode = "catalog" }) {
                 ✕
               </button>
             </div>
-            <Sidebar mobile />
+            <FilterSidebar {...filterSidebarProps} mobile />
           </div>
         </div>
       )}
