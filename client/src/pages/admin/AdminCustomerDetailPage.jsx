@@ -2,16 +2,20 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { adminApi } from "../../lib/adminApi.js";
 import { formatKes } from "../../utils/format.js";
+import { LoadingState } from "../../components/LoadingState.jsx";
 
 export function AdminCustomerDetailPage() {
   const { id } = useParams();
   const [cust, setCust] = useState(null);
 
   useEffect(() => {
-    adminApi.get(`/api/admin/customers/${id}`).then((r) => setCust(r.data));
+    adminApi
+      .get(`/api/admin/customers/${id}`)
+      .then((r) => setCust(r.data))
+      .catch(() => {});
   }, [id]);
 
-  if (!cust) return <p className="text-muted p-6">Loading…</p>;
+  if (!cust) return <LoadingState label="Loading customer..." />;
 
   return (
     <div className="space-y-4">

@@ -7,6 +7,7 @@ const router = Router();
 router.get(
   "/",
   asyncHandler(async (_req, res) => {
+    res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
     const brands = await prisma.brand.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true, slug: true },

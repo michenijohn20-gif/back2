@@ -8,8 +8,8 @@ export function ProductGridSkeleton({ cols = 4, label }) {
   return (
     <div className="space-y-3" role="status" aria-live="polite">
       {label && (
-        <div className="flex items-center gap-2 text-sm font-medium text-body">
-          <span className="h-4 w-4 rounded-full border-2 border-primary/25 border-t-primary animate-spin" />
+        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-sm font-medium text-body shadow-card">
+          <span className="h-4 w-4 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
           <span>{label}</span>
         </div>
       )}
@@ -31,13 +31,19 @@ export function ProductGridSkeleton({ cols = 4, label }) {
 
 export function ProductDetailSkeleton() {
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10 grid lg:grid-cols-2 gap-8 animate-pulse">
-      <SkeletonPulse className="aspect-square w-full rounded" />
-      <div className="space-y-3">
-        <SkeletonPulse className="h-5 w-32" />
-        <SkeletonPulse className="h-8 w-full" />
-        <SkeletonPulse className="h-10 w-48" />
-        <SkeletonPulse className="h-28 w-full" />
+    <div className="max-w-6xl mx-auto px-4 py-10 space-y-4" role="status" aria-live="polite">
+      <div className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-2 text-sm font-medium text-body shadow-card">
+        <span className="h-4 w-4 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+        <span>Loading product...</span>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-8 animate-pulse">
+        <SkeletonPulse className="aspect-square w-full rounded" />
+        <div className="space-y-3">
+          <SkeletonPulse className="h-5 w-32" />
+          <SkeletonPulse className="h-8 w-full" />
+          <SkeletonPulse className="h-10 w-48" />
+          <SkeletonPulse className="h-28 w-full" />
+        </div>
       </div>
     </div>
   );

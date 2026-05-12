@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import { adminApi } from "../../lib/adminApi.js";
 import { Btn } from "../../components/ui.jsx";
+import { LoadingState } from "../../components/LoadingState.jsx";
 
 export function AdminSettingsPage() {
   const [vals, setVals] = useState({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adminApi.get("/api/admin/settings").then((r) => setVals(r.data));
+    setLoading(true);
+    adminApi
+      .get("/api/admin/settings")
+      .then((r) => setVals(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
@@ -33,6 +40,11 @@ export function AdminSettingsPage() {
         Values save to the Postgres `Setting` table. Production secrets belong in `.env`, but admins can jot
         shortcodes reference numbers here during onboarding.
       </p>
+      {loading ? (
+        <div className="border border-border rounded bg-white shadow-card">
+          <LoadingState label="Loading settings..." />
+        </div>
+      ) : (
       <div className="border border-border rounded bg-white shadow-card p-6 space-y-4">
         {row("store_name", "Store name")}
         {row("contact_email", "Contact email")}
@@ -46,6 +58,7 @@ export function AdminSettingsPage() {
         {row("paystack_secret_key", "Paystack secret key", true)}
         <Btn onClick={save}>Save configuration</Btn>
       </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { adminApi } from "../../lib/adminApi.js";
 import { formatKes } from "../../utils/format.js";
+import { LoadingState } from "../../components/LoadingState.jsx";
 import {
   LineChart,
   Line,
@@ -21,8 +22,7 @@ export function AdminDashboardPage() {
       .catch(() => {});
   }, []);
 
-  if (!dash)
-    return <p className="text-muted">Pulling KPIs… Configure admin token via /admin/login if this hangs.</p>;
+  if (!dash) return <LoadingState label="Loading dashboard..." />;
 
   const kpis = [
     { label: "Total Orders", val: dash.totalOrders },

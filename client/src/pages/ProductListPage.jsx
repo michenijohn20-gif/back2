@@ -4,6 +4,7 @@ import api from "../lib/api";
 import { ProductCard } from "../components/ProductCard.jsx";
 import { Btn } from "../components/ui.jsx";
 import { ProductGridSkeleton } from "../components/SkeletonGrid.jsx";
+import { cacheKey, readSessionCache, writeSessionCache } from "../lib/requestCache.js";
 
 const SORTS = [
   { value: "featured", label: "Featured" },
@@ -44,14 +45,21 @@ export function ProductListPage({ mode = "catalog" }) {
 
   useEffect(() => {
     let stopped = false;
+    const cachedCats = readSessionCache("catalog:categories", 5 * 60_000);
+    const cachedBrands = readSessionCache("catalog:brands", 5 * 60_000);
+    if (cachedCats) setCats(cachedCats);
+    if (cachedBrands) setBrnds(cachedBrands);
+
     Promise.all([
       api.get("/api/categories"),
       api.get("/api/brands"),
     ])
       .then(([c, b]) => {
         if (stopped) return;
-        setCats(c.data);
-        setBrnds(b.data);
+        setCats(c.data || []);
+        setBrnds(b.data || []);
+        writeSessionCache("catalog:categories", c.data || []);
+        writeSessionCache("catalog:brands", b.data || []);
       })
       .catch(() => {});
     return () => {
@@ -63,28 +71,41 @@ export function ProductListPage({ mode = "catalog" }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
+    const params = Object.fromEntries(
+      [
+        ["page", page],
+        ["pageSize", 12],
+        ["sort", sort],
+        ["condition", condition],
+        ["priceMin", priceMin],
+        ["priceMax", priceMax],
+        ["storage", storageFilter],
+        ["color", colorFilter],
+        ["inStock", inStock === "true" ? "true" : ""],
+        ["categories", selectedCats.join(",")],
+        ["brands", selectedBrands.join(",")],
+        ["q", q],
+      ].filter(([, v]) => v !== "" && v != null),
+    );
+    const key = cacheKey("catalog:products", params);
+    const cached = readSessionCache(key, 45_000);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
     api
       .get("/api/products", {
         signal: controller.signal,
-        params: Object.fromEntries(
-          [
-            ["page", page],
-            ["pageSize", 12],
-            ["sort", sort],
-            ["condition", condition],
-            ["priceMin", priceMin],
-            ["priceMax", priceMax],
-            ["storage", storageFilter],
-            ["color", colorFilter],
-            ["inStock", inStock === "true" ? "true" : ""],
-            ["categories", selectedCats.join(",")],
-            ["brands", selectedBrands.join(",")],
-            ["q", q],
-          ].filter(([, v]) => v !== "" && v != null),
-        ),
+        params,
       })
-      .then((r) => setData({ products: r.data.products || [], total: r.data.total || 0 }))
+      .then((r) => {
+        const next = { products: r.data.products || [], total: r.data.total || 0 };
+        writeSessionCache(key, next);
+        setData(next);
+      })
       .catch((e) => {
         if (e.name !== "CanceledError" && e.code !== "ERR_CANCELED") {
           setData({ products: [], total: 0 });

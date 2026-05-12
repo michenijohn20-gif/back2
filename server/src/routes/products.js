@@ -4,6 +4,10 @@ import { asyncHandler } from "../util/asyncHandler.js";
 
 const router = Router();
 
+function setPublicCache(res, seconds = 45) {
+  res.set("Cache-Control", `public, max-age=${seconds}, stale-while-revalidate=120`);
+}
+
 function imageColorFromUrl(url = "") {
   const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
   return match ? match[1].trim() : null;
@@ -132,6 +136,7 @@ router.get("/", asyncHandler(async (req, res) => {
     pageSize = "12",
     sort = "featured",
   } = req.query;
+  setPublicCache(res, featured === "true" ? 60 : 30);
 
   const take = Math.min(48, Math.max(1, Number(pageSize) || 12));
   const skip = (Math.max(1, Number(page) || 1) - 1) * take;
@@ -277,6 +282,7 @@ router.get("/", asyncHandler(async (req, res) => {
 router.get(
   "/:slug",
   asyncHandler(async (req, res) => {
+    setPublicCache(res, 60);
     const slug = req.params.slug;
     const product = await prisma.product.findUnique({
       where: { slug },

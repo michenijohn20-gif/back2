@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import api, { setAuthToken } from "../lib/api";
 import { useAuthStore } from "../store/authStore";
 import { formatKes } from "../utils/format";
+import { LoadingState } from "../components/LoadingState.jsx";
 
 export function OrderDetailPage() {
   const { orderNumber } = useParams();
@@ -26,7 +27,7 @@ export function OrderDetailPage() {
 
   if (!accessToken) return <Navigate to="/login" replace />;
   if (error) return <p className="p-8 text-center text-red-600">{error}</p>;
-  if (!order) return <p className="p-8 text-center text-muted">Loading…</p>;
+  if (!order) return <LoadingState label="Loading order..." className="px-4 py-10" />;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10 space-y-6">

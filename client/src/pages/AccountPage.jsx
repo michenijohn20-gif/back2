@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import api, { setAuthToken } from "../lib/api";
-import { Btn } from "../components/ui.jsx";
+import { Btn, BtnLink, ConditionBadge } from "../components/ui.jsx";
+import { LoadingState } from "../components/LoadingState.jsx";
 import { useAuthStore } from "../store/authStore";
 import { formatKes } from "../utils/format";
-import { ProductCard } from "../components/ProductCard.jsx";
+import { priceFor } from "../components/ProductCard.jsx";
 import { isValidKenyaPhone } from "../utils/phone";
 
 const tabs = [
@@ -23,6 +24,8 @@ export function AccountPage() {
   const [tab, setTab] = useState("orders");
   const [orders, setOrders] = useState([]);
   const [wishlist, setWishlist] = useState([]);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [wishlistBusyId, setWishlistBusyId] = useState("");
   const [addresses, setAddresses] = useState([]);
   const [profile, setProfile] = useState({ fullName: "", email: "", phone: "" });
   const [pw, setPw] = useState({ current: "", next: "" });
@@ -60,9 +63,14 @@ export function AccountPage() {
 
   const loadWishlist = async () => {
     if (!accessToken) return;
+    setWishlistLoading(true);
     const headers = { Authorization: `Bearer ${accessToken}` };
-    const w = await api.get("/api/wishlist", { headers });
-    setWishlist(w.data);
+    try {
+      const w = await api.get("/api/wishlist", { headers });
+      setWishlist(w.data);
+    } finally {
+      setWishlistLoading(false);
+    }
   };
 
   const loadAddresses = async () => {
@@ -73,9 +81,9 @@ export function AccountPage() {
   };
 
   useEffect(() => {
-    if (tab === "orders") loadOrders();
-    if (tab === "wishlist") loadWishlist();
-    if (tab === "addresses") loadAddresses();
+    if (tab === "orders") loadOrders().catch(() => {});
+    if (tab === "wishlist") loadWishlist().catch(() => {});
+    if (tab === "addresses") loadAddresses().catch(() => {});
   }, [accessToken, tab]);
 
   if (!accessToken) {
@@ -212,28 +220,55 @@ export function AccountPage() {
         )}
 
         {tab === "wishlist" && (
-          <div>
-            <h1 className="text-2xl font-semibold text-ink mb-4">Wishlist</h1>
-            {wishlist.length === 0 ? (
-              <p className="text-sm text-muted">Save items with the heart icon while browsing.</p>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Saved shortlist</p>
+                <h1 className="text-2xl font-semibold text-ink">Wishlist</h1>
+                <p className="text-sm text-muted">
+                  Compare saved devices and come back when you are ready to order.
+                </p>
+              </div>
+              <BtnLink to="/products" variant="secondary">
+                Browse catalogue
+              </BtnLink>
+            </div>
+
+            {wishlistLoading ? (
+              <div className="border border-border rounded bg-white shadow-card">
+                <LoadingState label="Loading wishlist..." />
+              </div>
+            ) : wishlist.length === 0 ? (
+              <div className="border border-dashed border-border rounded bg-white p-8 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                  <span className="text-xl">♡</span>
+                </div>
+                <h2 className="text-lg font-semibold text-ink">No saved devices yet</h2>
+                <p className="mt-1 text-sm text-muted">
+                  Tap the heart on any listing to keep it here for later.
+                </p>
+              </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {wishlist.map((p) => (
-                  <div key={p.id} className="border border-border rounded bg-white shadow-card p-3 space-y-2">
-                    <ProductCard product={{ ...p, isWishlisted: true }} />
-                    <Btn
-                      variant="ghost"
-                      className="w-full text-red-600"
-                      onClick={async () => {
+                  <WishlistItem
+                    key={p.id}
+                    product={p}
+                    removing={wishlistBusyId === p.id}
+                    onRemove={async () => {
+                      setWishlistBusyId(p.id);
+                      try {
                         await api.delete(`/api/wishlist/${p.id}`, {
                           headers: { Authorization: `Bearer ${accessToken}` },
                         });
-                        loadWishlist();
-                      }}
-                    >
-                      Remove
-                    </Btn>
-                  </div>
+                        setWishlist((items) => items.filter((item) => item.id !== p.id));
+                      } catch {
+                        window.alert("Could not remove this saved item.");
+                      } finally {
+                        setWishlistBusyId("");
+                      }
+                    }}
+                  />
                 ))}
               </div>
             )}
@@ -377,4 +412,102 @@ export function AccountPage() {
       </section>
     </div>
   );
+}
+
+function WishlistItem({ product, removing, onRemove }) {
+  const image = cleanImageUrl(product.images?.[0]?.url) || "/placeholder.svg";
+  const cheapest = pickCheapestOption(product);
+  const best = pickBestConditionOption(product);
+  const variant = cheapest?.variant || product.variants?.[0];
+  const spec = [variant?.storage, variant?.color].filter(Boolean).join(" · ");
+
+  return (
+    <div className="grid grid-cols-[96px_1fr] gap-3 rounded border border-border bg-white p-3 shadow-card transition hover:border-primary/60">
+      <Link to={`/products/${product.slug}`} className="block aspect-square overflow-hidden rounded border border-border bg-surface">
+        <img
+          loading="lazy"
+          decoding="async"
+          src={image}
+          alt={product.name}
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "/placeholder.svg";
+          }}
+        />
+      </Link>
+      <div className="min-w-0 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <ConditionBadge condition={best?.condition || "EXCELLENT"} />
+          <button
+            type="button"
+            className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-60"
+            disabled={removing}
+            onClick={onRemove}
+          >
+            {removing ? "Removing..." : "Remove"}
+          </button>
+        </div>
+        <Link to={`/products/${product.slug}`} className="block text-ink hover:text-primary">
+          <p className="line-clamp-2 text-sm font-semibold leading-snug">
+            {product.brand?.name && <span className="text-body font-medium">{product.brand.name} </span>}
+            {product.name}
+          </p>
+        </Link>
+        {spec && <p className="line-clamp-1 text-xs text-muted">{spec}</p>}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-base font-semibold text-ink">From {formatKes(cheapest?.price || 0)}</p>
+          <Link to={`/products/${product.slug}`} className="text-xs font-semibold text-primary hover:underline">
+            View details
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function cleanImageUrl(url = "") {
+  const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
+  return (match ? match[2] : url).trim();
+}
+
+function stockFor(variant, condition) {
+  if (!variant) return 0;
+  const c = String(condition || "EXCELLENT").toUpperCase();
+  return c === "GOOD" ? variant.stockGood : c === "FAIR" ? variant.stockFair : variant.stockExcellent;
+}
+
+function productOptions(product) {
+  return (product.variants || [])
+    .flatMap((variant) =>
+      ["EXCELLENT", "GOOD", "FAIR"].map((condition) => ({
+        variant,
+        condition,
+        price: priceFor(variant, condition),
+        stock: stockFor(variant, condition),
+      })),
+    )
+    .filter((option) => option.price > 0);
+}
+
+function pickCheapestOption(product) {
+  const options = productOptions(product);
+  return (
+    options
+      .filter((option) => option.stock > 0)
+      .sort((a, b) => a.price - b.price)[0] || options.sort((a, b) => a.price - b.price)[0]
+  );
+}
+
+function pickBestConditionOption(product) {
+  const options = productOptions(product);
+  const source = options.filter((option) => option.stock > 0);
+  const candidates = source.length ? source : options;
+  for (const condition of ["EXCELLENT", "GOOD", "FAIR"]) {
+    const match = candidates
+      .filter((option) => option.condition === condition)
+      .sort((a, b) => a.price - b.price)[0];
+    if (match) return match;
+  }
+  return null;
 }

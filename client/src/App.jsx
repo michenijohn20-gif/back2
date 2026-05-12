@@ -7,6 +7,7 @@ import { useAuthStore } from "./store/authStore.js";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { MainLayout } from "./components/layout/MainLayout.jsx";
 import { TinyLink404 } from "./components/ErrorBoundary.jsx";
+import { LoadingState } from "./components/LoadingState.jsx";
 
 const page = (loader, exportName) =>
   lazy(() => loader().then((mod) => ({ default: mod[exportName] })));
@@ -68,7 +69,7 @@ export default function App() {
     <HelmetProvider>
       <ErrorBoundary>
         <AuthHydrate />
-        <Suspense fallback={<div className="px-4 py-10 text-sm text-muted">Loading...</div>}>
+        <Suspense fallback={<LoadingState label="Loading page..." className="px-4 py-10" />}>
           <Routes>
             <Route path="/admin/login" element={<AdminLoginPage />} />
             <Route path="/admin" element={<AdminLayout />}>

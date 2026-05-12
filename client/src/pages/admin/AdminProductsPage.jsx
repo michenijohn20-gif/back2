@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { adminApi } from "../../lib/adminApi.js";
 import { formatKes } from "../../utils/format.js";
 import { Btn } from "../../components/ui.jsx";
+import { TableSkeleton } from "../../components/LoadingState.jsx";
 
 const blankVariant = {
   storage: "",
@@ -34,6 +35,7 @@ export function AdminProductsPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ total: 0, page: 1, pageSize: 50 });
   const [showCreate, setShowCreate] = useState(false);
   const [lookup, setLookup] = useState("");
@@ -46,29 +48,36 @@ export function AdminProductsPage() {
   const [imageUrlsText, setImageUrlsText] = useState("");
   const [variants, setVariants] = useState([{ ...blankVariant }]);
 
-  const load = (page = meta.page) =>
-    adminApi.get("/api/admin/products", { params: { page, pageSize: meta.pageSize } }).then((r) => {
-      setProducts(r.data.products || []);
-      setMeta({ total: r.data.total || 0, page: r.data.page || page, pageSize: r.data.pageSize || meta.pageSize });
-    });
+  const load = (page = meta.page) => {
+    setLoading(true);
+    return adminApi
+      .get("/api/admin/products", { params: { page, pageSize: meta.pageSize } })
+      .then((r) => {
+        setProducts(r.data.products || []);
+        setMeta({ total: r.data.total || 0, page: r.data.page || page, pageSize: r.data.pageSize || meta.pageSize });
+      })
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     load().catch(() => {});
-    Promise.all([adminApi.get("/api/categories"), adminApi.get("/api/brands")]).then(([c, b]) => {
-      setCategories(c.data || []);
-      setBrands(b.data || []);
-      setForm((f) => ({
-        ...f,
-        categoryId: f.categoryId || c.data?.[0]?.id || "",
-        brandId: f.brandId || b.data?.[0]?.id || "",
-      }));
-    });
+    Promise.all([adminApi.get("/api/categories"), adminApi.get("/api/brands")])
+      .then(([c, b]) => {
+        setCategories(c.data || []);
+        setBrands(b.data || []);
+        setForm((f) => ({
+          ...f,
+          categoryId: f.categoryId || c.data?.[0]?.id || "",
+          brandId: f.brandId || b.data?.[0]?.id || "",
+        }));
+      })
+      .catch(() => {});
   }, []);
 
   const del = async (id) => {
     if (!window.confirm("Archive / delete permanently?")) return;
     await adminApi.delete(`/api/admin/products/${id}`);
-    load();
+    load().catch(() => {});
   };
 
   const resetEditor = () => {
@@ -177,7 +186,7 @@ export function AdminProductsPage() {
       }
       resetEditor();
       setShowCreate(false);
-      load(1);
+      load(1).catch(() => {});
     } catch (e) {
       window.alert(e.response?.data?.error || "Could not save product.");
     } finally {
@@ -300,53 +309,57 @@ export function AdminProductsPage() {
         </div>
       )}
 
-      <div className="overflow-auto border border-border rounded bg-white shadow-card">
-        <table className="min-w-full text-sm">
-          <thead className="bg-surface text-left text-muted">
-            <tr>
-              <th className="p-3">Image</th>
-              <th className="p-3">Name</th>
-              <th className="p-3">Category</th>
-              <th className="p-3">Price (Ex)</th>
-              <th className="p-3">Stock</th>
-              <th className="p-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => {
-              const v0 = p.variants?.[0];
-              const stock = (v0?.stockExcellent || 0) + (v0?.stockGood || 0) + (v0?.stockFair || 0);
-              return (
-                <tr key={p.id} className="border-t border-border">
-                  <td className="p-3">
-                    <img loading="lazy" src={cleanImageUrl(p.images?.[0]?.url) || "/placeholder.svg"} alt="" className="h-12 w-12 object-cover rounded border border-border" />
-                  </td>
-                  <td className="p-3">
-                    <div className="font-semibold text-ink">{p.name}</div>
-                    <div className="text-xs text-muted">{p.brand?.name}</div>
-                  </td>
-                  <td className="p-3">{p.category?.name}</td>
-                  <td className="p-3">{formatKes(v0?.priceExcellent || 0)}</td>
-                  <td className="p-3">{stock}</td>
-                  <td className="p-3 text-right">
-                    <button type="button" className="text-primary text-xs mr-3" onClick={() => openEdit(p.id)}>
-                      Edit
-                    </button>
-                    <button type="button" className="text-red-600 text-xs" onClick={() => del(p.id)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <TableSkeleton rows={8} columns={6} label="Loading products..." />
+      ) : (
+        <div className="overflow-auto border border-border rounded bg-white shadow-card">
+          <table className="min-w-full text-sm">
+            <thead className="bg-surface text-left text-muted">
+              <tr>
+                <th className="p-3">Image</th>
+                <th className="p-3">Name</th>
+                <th className="p-3">Category</th>
+                <th className="p-3">Price (Ex)</th>
+                <th className="p-3">Stock</th>
+                <th className="p-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p) => {
+                const v0 = p.variants?.[0];
+                const stock = (v0?.stockExcellent || 0) + (v0?.stockGood || 0) + (v0?.stockFair || 0);
+                return (
+                  <tr key={p.id} className="border-t border-border">
+                    <td className="p-3">
+                      <img loading="lazy" src={cleanImageUrl(p.images?.[0]?.url) || "/placeholder.svg"} alt="" className="h-12 w-12 object-cover rounded border border-border" />
+                    </td>
+                    <td className="p-3">
+                      <div className="font-semibold text-ink">{p.name}</div>
+                      <div className="text-xs text-muted">{p.brand?.name}</div>
+                    </td>
+                    <td className="p-3">{p.category?.name}</td>
+                    <td className="p-3">{formatKes(v0?.priceExcellent || 0)}</td>
+                    <td className="p-3">{stock}</td>
+                    <td className="p-3 text-right">
+                      <button type="button" className="text-primary text-xs mr-3" onClick={() => openEdit(p.id)}>
+                        Edit
+                      </button>
+                      <button type="button" className="text-red-600 text-xs" onClick={() => del(p.id)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {meta.total > meta.pageSize && (
         <div className="flex items-center justify-end gap-3 text-sm">
           <span className="text-muted">Page {meta.page} of {Math.max(1, Math.ceil(meta.total / meta.pageSize))}</span>
-          <Btn variant="secondary" disabled={meta.page <= 1} onClick={() => load(meta.page - 1)}>Previous</Btn>
-          <Btn variant="secondary" disabled={meta.page >= Math.ceil(meta.total / meta.pageSize)} onClick={() => load(meta.page + 1)}>Next</Btn>
+          <Btn variant="secondary" disabled={meta.page <= 1} onClick={() => load(meta.page - 1).catch(() => {})}>Previous</Btn>
+          <Btn variant="secondary" disabled={meta.page >= Math.ceil(meta.total / meta.pageSize)} onClick={() => load(meta.page + 1).catch(() => {})}>Next</Btn>
         </div>
       )}
     </div>

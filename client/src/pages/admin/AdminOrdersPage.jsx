@@ -2,21 +2,25 @@ import { useEffect, useState } from "react";
 import { adminApi } from "../../lib/adminApi.js";
 import { formatKes } from "../../utils/format.js";
 import { Btn } from "../../components/ui.jsx";
+import { TableSkeleton } from "../../components/LoadingState.jsx";
 
 export function AdminOrdersPage() {
   const [rows, setRows] = useState([]);
   const [filter, setFilter] = useState("");
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({ fulfillmentStatus: "", trackingNumber: "", adminNotes: "" });
 
   const load = () => {
-    adminApi
+    setLoading(true);
+    return adminApi
       .get("/api/admin/orders", { params: { q: filter || undefined } })
-      .then((r) => setRows(r.data.orders || []));
+      .then((r) => setRows(r.data.orders || []))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    load();
+    load().catch(() => {});
   }, []);
 
   const open = async (id) => {
@@ -33,7 +37,7 @@ export function AdminOrdersPage() {
     if (!selected) return;
     await adminApi.patch(`/api/admin/orders/${selected.id}`, form);
     setSelected(null);
-    load();
+    load().catch(() => {});
   };
 
   return (
@@ -52,43 +56,47 @@ export function AdminOrdersPage() {
           </Btn>
         </div>
       </div>
-      <div className="overflow-auto border border-border rounded bg-white shadow-card">
-        <table className="min-w-full text-sm">
-          <thead className="bg-surface text-left text-muted">
-            <tr>
-              <th className="p-3">Order</th>
-              <th className="p-3">Customer</th>
-              <th className="p-3">Delivery</th>
-              <th className="p-3">Items</th>
-              <th className="p-3">Total</th>
-              <th className="p-3">Payment</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((o) => (
-              <tr key={o.id} className="border-t border-border cursor-pointer" onClick={() => open(o.id)}>
-                <td className="p-3 font-semibold text-primary">{o.orderNumber}</td>
-                <td className="p-3">
-                  <div>{o.guestName || o.user?.fullName}</div>
-                  <div className="text-xs text-muted">{o.guestEmail || o.user?.email}</div>
-                  <div className="text-xs text-muted">{o.guestPhone || o.user?.phone}</div>
-                </td>
-                <td className="p-3 text-xs text-body">
-                  <div>{o.deliveryTown || "Not set"}</div>
-                  <div className="text-muted">{o.deliveryCounty}</div>
-                </td>
-                <td className="p-3">{o.items.reduce((s, i) => s + i.quantity, 0)}</td>
-                <td className="p-3">{formatKes(o.totalAmount)}</td>
-                <td className="p-3">{o.paymentStatus}</td>
-                <td className="p-3">{o.fulfillmentStatus}</td>
-                <td className="p-3 text-xs text-muted">{new Date(o.createdAt).toLocaleDateString("en-KE")}</td>
+      {loading ? (
+        <TableSkeleton rows={7} columns={8} label="Loading orders..." />
+      ) : (
+        <div className="overflow-auto border border-border rounded bg-white shadow-card">
+          <table className="min-w-full text-sm">
+            <thead className="bg-surface text-left text-muted">
+              <tr>
+                <th className="p-3">Order</th>
+                <th className="p-3">Customer</th>
+                <th className="p-3">Delivery</th>
+                <th className="p-3">Items</th>
+                <th className="p-3">Total</th>
+                <th className="p-3">Payment</th>
+                <th className="p-3">Status</th>
+                <th className="p-3">Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((o) => (
+                <tr key={o.id} className="border-t border-border cursor-pointer" onClick={() => open(o.id)}>
+                  <td className="p-3 font-semibold text-primary">{o.orderNumber}</td>
+                  <td className="p-3">
+                    <div>{o.guestName || o.user?.fullName}</div>
+                    <div className="text-xs text-muted">{o.guestEmail || o.user?.email}</div>
+                    <div className="text-xs text-muted">{o.guestPhone || o.user?.phone}</div>
+                  </td>
+                  <td className="p-3 text-xs text-body">
+                    <div>{o.deliveryTown || "Not set"}</div>
+                    <div className="text-muted">{o.deliveryCounty}</div>
+                  </td>
+                  <td className="p-3">{o.items.reduce((s, i) => s + i.quantity, 0)}</td>
+                  <td className="p-3">{formatKes(o.totalAmount)}</td>
+                  <td className="p-3">{o.paymentStatus}</td>
+                  <td className="p-3">{o.fulfillmentStatus}</td>
+                  <td className="p-3 text-xs text-muted">{new Date(o.createdAt).toLocaleDateString("en-KE")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selected && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">

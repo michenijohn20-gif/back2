@@ -4,6 +4,8 @@ import api from "../lib/api";
 import { Btn, BtnLink } from "../components/ui.jsx";
 import { ProductCard } from "../components/ProductCard.jsx";
 import { ProductGridSkeleton } from "../components/SkeletonGrid.jsx";
+import { LoadingState } from "../components/LoadingState.jsx";
+import { readSessionCache, writeSessionCache } from "../lib/requestCache.js";
 
 const trust = [
   { t: "Tested & Verified", d: "Clear grading and device checks before handoff." },
@@ -56,26 +58,35 @@ export function HomePage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      setLoading(true);
+      const cachedFeatured = readSessionCache("home:featured", 60_000);
+      const cachedCats = readSessionCache("catalog:categories", 5 * 60_000);
+      if (cachedFeatured) setFeatured(cachedFeatured);
+      if (cachedCats) setCats(cachedCats);
+      setLoading(!(cachedFeatured && cachedCats));
       try {
-        const [fp, cg] = await Promise.all([
-          api.get("/api/products", { params: { featured: "true", pageSize: 8, sort: "featured" } }),
-          api.get("/api/categories"),
-        ]);
+        const featuredReq = api.get("/api/products", { params: { featured: "true", pageSize: 8, sort: "featured" } });
+        const newestReq = api.get("/api/products", { params: { pageSize: 8, sort: "newest" } }).catch(() => null);
+        const categoriesReq = api.get("/api/categories");
+        const [fp, cg] = await Promise.allSettled([featuredReq, categoriesReq]);
         if (cancelled) return;
-        let products = fp.data?.products || [];
+        let products = fp.status === "fulfilled" ? fp.value.data?.products || [] : [];
         if (products.length < 3) {
-          const fb = await api.get("/api/products", { params: { pageSize: 8, sort: "newest" } });
-          if (!cancelled) {
-            const seen = new Set(products.map((product) => product.id));
-            products = [
-              ...products,
-              ...(fb.data?.products || []).filter((product) => !seen.has(product.id)),
-            ];
-          }
+          const fb = await newestReq;
+          const newest = fb?.data?.products || [];
+          const seen = new Set(products.map((product) => product.id));
+          products = [
+            ...products,
+            ...newest.filter((product) => !seen.has(product.id)),
+          ];
         }
-        setFeatured(products);
-        setCats(cg.data || []);
+        if (products.length || !cachedFeatured) {
+          setFeatured(products);
+          writeSessionCache("home:featured", products);
+        }
+        if (cg.status === "fulfilled") {
+          setCats(cg.value.data || []);
+          writeSessionCache("catalog:categories", cg.value.data || []);
+        }
       } catch (e) {
         if (import.meta.env.DEV) console.warn("[HomePage] products/categories fetch failed", e);
         if (!cancelled) {
@@ -167,8 +178,8 @@ export function HomePage() {
                 </Link>
               </div>
             ) : (
-              <div className="min-h-72 flex items-center justify-center border border-border rounded bg-surface text-muted">
-                Loading featured products...
+              <div className="min-h-72 border border-border rounded bg-surface">
+                <LoadingState label="Loading featured products..." />
               </div>
             )}
           </div>

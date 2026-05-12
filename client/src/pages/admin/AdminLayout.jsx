@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ADMIN_UNAUTHORIZED_EVENT, setAdminApiToken } from "../../lib/adminApi.js";
+import { LoadingState } from "../../components/LoadingState.jsx";
 import { useAdminStore } from "../../store/adminStore.js";
 import { usePersistHydrated } from "../../hooks/useStoreHydrated.js";
 
@@ -33,22 +34,22 @@ export function AdminLayout() {
   useEffect(() => {
     const handleUnauthorized = () => {
       logout();
-      navigate("/admin/login", { replace: true, state: { from: location } });
+      navigate("/", { replace: true });
     };
     window.addEventListener(ADMIN_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(ADMIN_UNAUTHORIZED_EVENT, handleUnauthorized);
-  }, [location, logout, navigate]);
+  }, [logout, navigate]);
 
   if (!storageReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface text-muted text-sm">
-        Loading admin workspace…
+        <LoadingState label="Loading admin workspace..." />
       </div>
     );
   }
 
   if (!token) {
-    return <Navigate to="/admin/login" replace state={{ from: location }} />;
+    return <Navigate to="/" replace state={{ from: location }} />;
   }
 
   return (

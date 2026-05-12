@@ -1,29 +1,37 @@
 import { useEffect, useState } from "react";
 import { adminApi } from "../../lib/adminApi.js";
 import { Btn } from "../../components/ui.jsx";
+import { LoadingState } from "../../components/LoadingState.jsx";
 
 export function AdminCategoriesPage() {
   const [cats, setCats] = useState([]);
   const [name, setName] = useState("");
   const [iconUrl, setIconUrl] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const load = () => adminApi.get("/api/admin/categories").then((r) => setCats(r.data));
+  const load = () => {
+    setLoading(true);
+    return adminApi
+      .get("/api/admin/categories")
+      .then((r) => setCats(r.data))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    load();
+    load().catch(() => {});
   }, []);
 
   const add = async () => {
     await adminApi.post("/api/admin/categories", { name, iconUrl });
     setName("");
     setIconUrl("");
-    load();
+    load().catch(() => {});
   };
 
   const del = async (id) => {
     if (!window.confirm("Delete category? Ensure no products rely on it.")) return;
     await adminApi.delete(`/api/admin/categories/${id}`);
-    load();
+    load().catch(() => {});
   };
 
   return (
@@ -46,6 +54,11 @@ export function AdminCategoriesPage() {
           Add category
         </Btn>
       </div>
+      {loading ? (
+        <div className="border border-border rounded bg-white shadow-card">
+          <LoadingState label="Loading categories..." />
+        </div>
+      ) : (
       <div className="grid gap-3">
         {cats.map((c) => (
           <div key={c.id} className="border border-border rounded p-4 flex justify-between bg-white shadow-card">
@@ -62,6 +75,7 @@ export function AdminCategoriesPage() {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }
