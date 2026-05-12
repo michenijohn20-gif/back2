@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import "dotenv/config";
+import { prisma } from "../prisma.js";
 
 async function getTransporter() {
   if (!process.env.SMTP_HOST) {
@@ -33,9 +34,40 @@ export async function sendMailSafe({ to, subject, html, text }) {
   }
 }
 
+async function getOrderEmailFlags(order) {
+  try {
+    const fresh = await prisma.order.findUnique({
+      where: { id: order.id },
+      select: { confirmationEmailSent: true, adminEmailSent: true },
+    });
+    return {
+      confirmationEmailSent: Boolean(fresh?.confirmationEmailSent ?? order.confirmationEmailSent),
+      adminEmailSent: Boolean(fresh?.adminEmailSent ?? order.adminEmailSent),
+    };
+  } catch (e) {
+    console.error("[email] could not read email flags:", e.message);
+    return {
+      confirmationEmailSent: Boolean(order.confirmationEmailSent),
+      adminEmailSent: Boolean(order.adminEmailSent),
+    };
+  }
+}
+
+async function markOrderEmailSent(orderId, field) {
+  try {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { [field]: true },
+    });
+  } catch (e) {
+    console.error(`[email] could not update ${field}:`, e.message);
+  }
+}
+
 export async function sendOrderEmails({ order, items }) {
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
   const customerEmail = order.guestEmail || order.user?.email;
+  const { confirmationEmailSent, adminEmailSent } = await getOrderEmailFlags(order);
   const linesHtml = items
     .map(
       (l) =>
@@ -55,18 +87,24 @@ export async function sendOrderEmails({ order, items }) {
     <p style="color:#6B7280;font-size:14px;">Delivery to ${order.deliveryTown}, ${order.deliveryCounty}.</p>
     <p>— RefurbKE</p>`;
 
-  if (customerEmail) {
-    await sendMailSafe({
+  if (customerEmail && !confirmationEmailSent) {
+    const result = await sendMailSafe({
       to: customerEmail,
       subject: `Your RefurbKE order ${order.orderNumber} is confirmed`,
       html: summary,
     });
+    if (result.ok && !result.noop) {
+      await markOrderEmailSent(order.id, "confirmationEmailSent");
+    }
   }
-  if (adminEmail) {
-    await sendMailSafe({
+  if (adminEmail && !adminEmailSent) {
+    const result = await sendMailSafe({
       to: adminEmail,
       subject: `New paid order ${order.orderNumber}`,
       html: `<p>New paid order.</p>${summary}`,
     });
+    if (result.ok && !result.noop) {
+      await markOrderEmailSent(order.id, "adminEmailSent");
+    }
   }
 }

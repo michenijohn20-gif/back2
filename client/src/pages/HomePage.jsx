@@ -259,7 +259,7 @@ export function HomePage() {
             <p className="text-primary font-semibold text-sm mb-2">Step 1</p>
             <h3 className="text-lg text-ink font-semibold mb-2">Browse & compare</h3>
             <p className="text-sm text-muted">
-              Filter Kenyan pricing, refurbishment grade, colour, storage, then shortlist confidently.
+              Filter pricing, refurbishment grade, colour, storage, then shortlist confidently.
             </p>
           </div>
           <div className="border border-border rounded bg-white shadow-card p-5">

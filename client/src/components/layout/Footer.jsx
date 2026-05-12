@@ -3,10 +3,9 @@ import { Link } from "react-router-dom";
 function IconMpesa() {
   return (
     <span className="inline-flex items-center gap-1 text-sm font-semibold text-ink">
-      <span className="w-7 h-7 rounded bg-[#4CAF50] text-white flex items-center justify-center text-xs">
-        M
+      <span className="w-24 h-7 rounded bg-[#4CAF50] text-white flex items-center justify-center text-xs">
+        M-Pesa
       </span>
-      M-Pesa
     </span>
   );
 }
@@ -14,8 +13,8 @@ function IconMpesa() {
 function IconCards() {
   return (
     <span className="inline-flex items-center gap-2 text-sm text-body">
-      <span className="px-2 py-1 border border-border rounded bg-white">Visa</span>
-      <span className="px-2 py-1 border border-border rounded bg-white">Mastercard</span>
+      <span className="px-2 py-1 border border-border rounded bg-[#F7B600]">Visa</span>
+      <span className="px-2 py-1 border border-border rounded bg-[#FF5F00]">Mastercard</span>
     </span>
   );
 }
