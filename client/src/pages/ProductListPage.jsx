@@ -4,7 +4,12 @@ import api from "../lib/api";
 import { ProductCard } from "../components/ProductCard.jsx";
 import { Btn } from "../components/ui.jsx";
 import { ProductGridSkeleton } from "../components/SkeletonGrid.jsx";
-import { cacheKey, readSessionCache, writeSessionCache } from "../lib/requestCache.js";
+import { readSessionCache, readStaleSessionCache, writeSessionCache } from "../lib/requestCache.js";
+import {
+  PRODUCT_CACHE_TTL_MS,
+  PRODUCT_STALE_CACHE_TTL_MS,
+  productCacheKey,
+} from "../lib/catalogPrefetch.js";
 
 const SORTS = [
   { value: "featured", label: "Featured" },
@@ -270,10 +275,10 @@ export function ProductListPage({ mode = "catalog" }) {
         ["q", q],
       ].filter(([, v]) => v !== "" && v != null),
     );
-    const key = cacheKey("catalog:products", params);
-    const cached = readSessionCache(key, 45_000);
+    const key = productCacheKey(params);
+    const cached = readStaleSessionCache(key, PRODUCT_CACHE_TTL_MS, PRODUCT_STALE_CACHE_TTL_MS);
     if (cached) {
-      setData(cached);
+      setData(cached.value);
       setLoading(false);
     } else {
       setLoading(true);
@@ -290,7 +295,7 @@ export function ProductListPage({ mode = "catalog" }) {
         setData(next);
       })
       .catch((e) => {
-        if (e.name !== "CanceledError" && e.code !== "ERR_CANCELED") {
+        if (!cached && e.name !== "CanceledError" && e.code !== "ERR_CANCELED") {
           setData({ products: [], total: 0 });
         }
       })

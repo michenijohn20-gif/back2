@@ -68,15 +68,15 @@ export function Footer() {
             <IconCards />
           </div>
           <div className="flex gap-3 mt-4 text-muted text-sm">
-            <a href="https://twitter.com" className="hover:text-primary">
-              Twitter
+
+            <a href="https://twitter.com" target="_blank">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/5/5a/X_icon_2.svg" alt="Twiiter" className="h-5 w-5" />
             </a>
-            <a href="https://instagram.com" className="hover:text-primary">
-              Instagram
+
+            <a href="https://instagram.com" className="hover:text-primary" target="_blank">
+              <img src="https://www.svgrepo.com/show/303145/instagram-2-1-logo.svg" alt="Instagram" className="h-5 w-5" />
             </a>
-            <a href="https://facebook.com" className="hover:text-primary">
-              Facebook
-            </a>
+
           </div>
         </div>
       </div>

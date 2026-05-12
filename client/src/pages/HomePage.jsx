@@ -6,6 +6,8 @@ import { ProductCard } from "../components/ProductCard.jsx";
 import { ProductGridSkeleton } from "../components/SkeletonGrid.jsx";
 import { LoadingState } from "../components/LoadingState.jsx";
 import { readSessionCache, writeSessionCache } from "../lib/requestCache.js";
+import { prefetchProducts } from "../lib/catalogPrefetch.js";
+import { preloadProductListPage } from "../lib/pagePreload.js";
 
 const trust = [
   { t: "Tested & Verified", d: "Clear grading and device checks before handoff." },
@@ -13,6 +15,22 @@ const trust = [
   { t: "Concierge Sourcing", d: "International refurb options handled through a Kenyan storefront." },
   { t: "Local Support", d: "Warranty handling and repair coordination through trusted local technicians." },
 ];
+
+function scheduleCatalogWarmup() {
+  if (typeof window === "undefined") return () => {};
+  const warm = () => {
+    preloadProductListPage();
+    prefetchProducts();
+  };
+
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(warm, { timeout: 1800 });
+    return () => window.cancelIdleCallback?.(id);
+  }
+
+  const timer = window.setTimeout(warm, 600);
+  return () => window.clearTimeout(timer);
+}
 
 const TrustIcon = ({ type }) => {
   if (type === "tested") {
@@ -57,6 +75,7 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cancelWarmup = scheduleCatalogWarmup();
     (async () => {
       const cachedFeatured = readSessionCache("home:featured", 60_000);
       const cachedCats = readSessionCache("catalog:categories", 5 * 60_000);
@@ -99,6 +118,7 @@ export function HomePage() {
     })();
     return () => {
       cancelled = true;
+      cancelWarmup();
     };
   }, []);
 

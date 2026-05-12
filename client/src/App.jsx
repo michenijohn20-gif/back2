@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import api, { setAuthToken } from "./lib/api.js";
+import { preloadProductListPage } from "./lib/pagePreload.js";
 import { useAuthStore } from "./store/authStore.js";
 
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
@@ -13,7 +14,7 @@ const page = (loader, exportName) =>
   lazy(() => loader().then((mod) => ({ default: mod[exportName] })));
 
 const HomePage = page(() => import("./pages/HomePage.jsx"), "HomePage");
-const ProductListPage = page(() => import("./pages/ProductListPage.jsx"), "ProductListPage");
+const ProductListPage = page(preloadProductListPage, "ProductListPage");
 const ProductDetailPage = page(() => import("./pages/ProductDetailPage.jsx"), "ProductDetailPage");
 const SearchPage = page(() => import("./pages/SearchPage.jsx"), "SearchPage");
 const CartPage = page(() => import("./pages/CartPage.jsx"), "CartPage");

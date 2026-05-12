@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import api from "../../lib/api";
+import { prefetchProducts } from "../../lib/catalogPrefetch.js";
+import { preloadProductListPage } from "../../lib/pagePreload.js";
 import { useCartStore } from "../../store/cartStore";
 import { useAuthStore } from "../../store/authStore";
 import { BtnLink } from "../ui.jsx";
@@ -66,6 +68,11 @@ export function Navbar() {
     if (!s) return;
     navigate(`/search?q=${encodeURIComponent(s)}`);
     setOpen(false);
+  };
+
+  const warmProducts = (params) => {
+    preloadProductListPage();
+    prefetchProducts(params);
   };
 
   return (
@@ -135,6 +142,9 @@ export function Navbar() {
               <NavLink
                 key={c.id}
                 to={`/products?categories=${c.slug}`}
+                onMouseEnter={() => warmProducts({ categories: c.slug })}
+                onFocus={() => warmProducts({ categories: c.slug })}
+                onTouchStart={() => warmProducts({ categories: c.slug })}
                 className={() =>
                   `shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 hover:bg-surface hover:text-primary ${
                     activeCategorySlug === c.slug ? "bg-[#EFF6FF] text-primary font-semibold" : ""
@@ -146,6 +156,9 @@ export function Navbar() {
             ))}
             <Link
               to="/products"
+              onMouseEnter={() => warmProducts()}
+              onFocus={() => warmProducts()}
+              onTouchStart={() => warmProducts()}
               className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 hover:bg-surface hover:text-primary ${
                 location.pathname === "/products" && !activeCategorySlug
                   ? "bg-[#EFF6FF] text-primary font-semibold"
@@ -165,6 +178,7 @@ export function Navbar() {
               <Link
                 key={c.id}
                 to={`/products?categories=${c.slug}`}
+                onTouchStart={() => warmProducts({ categories: c.slug })}
                 className="py-2 border-b border-border text-ink"
                 onClick={() => setOpen(false)}
               >

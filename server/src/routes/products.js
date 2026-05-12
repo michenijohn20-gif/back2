@@ -8,6 +8,40 @@ function setPublicCache(res, seconds = 45) {
   res.set("Cache-Control", `public, max-age=${seconds}, stale-while-revalidate=120`);
 }
 
+const LIST_CACHE_MAX_ENTRIES = 150;
+const listResponseCache = new Map();
+
+function stableQueryKey(query) {
+  const sp = new URLSearchParams();
+  Object.entries(query)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([key, value]) => {
+      const values = Array.isArray(value) ? value : [value];
+      values.forEach((v) => {
+        if (v !== "" && v != null) sp.append(key, String(v));
+      });
+    });
+  return sp.toString();
+}
+
+function readListCache(key) {
+  const cached = listResponseCache.get(key);
+  if (!cached) return null;
+  if (Date.now() > cached.expiresAt) {
+    listResponseCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeListCache(key, value, ttlMs) {
+  if (listResponseCache.has(key)) listResponseCache.delete(key);
+  while (listResponseCache.size >= LIST_CACHE_MAX_ENTRIES) {
+    listResponseCache.delete(listResponseCache.keys().next().value);
+  }
+  listResponseCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+}
+
 function imageColorFromUrl(url = "") {
   const match = String(url).match(/^\s*([^|]+)\s*\|\s*(https?:\/\/.+)$/i);
   return match ? match[1].trim() : null;
@@ -136,7 +170,12 @@ router.get("/", asyncHandler(async (req, res) => {
     pageSize = "12",
     sort = "featured",
   } = req.query;
-  setPublicCache(res, featured === "true" ? 60 : 30);
+  const cacheSeconds = featured === "true" ? 60 : 30;
+  setPublicCache(res, cacheSeconds);
+
+  const responseCacheKey = stableQueryKey(req.query);
+  const cachedResponse = readListCache(responseCacheKey);
+  if (cachedResponse) return res.json(cachedResponse);
 
   const take = Math.min(48, Math.max(1, Number(pageSize) || 12));
   const skip = (Math.max(1, Number(page) || 1) - 1) * take;
@@ -276,7 +315,9 @@ router.get("/", asyncHandler(async (req, res) => {
 
   const pagedProducts = products;
 
-  res.json({ total, page: Number(page), pageSize: take, products: pagedProducts });
+  const responseBody = { total, page: Number(page), pageSize: take, products: pagedProducts };
+  writeListCache(responseCacheKey, responseBody, cacheSeconds * 1000);
+  res.json(responseBody);
 }));
 
 router.get(
