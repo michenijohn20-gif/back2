@@ -53,7 +53,7 @@ export function AdminProductsPage() {
     });
 
   useEffect(() => {
-    load();
+    load().catch(() => {});
     Promise.all([adminApi.get("/api/categories"), adminApi.get("/api/brands")]).then(([c, b]) => {
       setCategories(c.data || []);
       setBrands(b.data || []);

@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { Link, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ADMIN_UNAUTHORIZED_EVENT, setAdminApiToken } from "../../lib/adminApi.js";
 import { useAdminStore } from "../../store/adminStore.js";
 import { usePersistHydrated } from "../../hooks/useStoreHydrated.js";
 
@@ -21,9 +22,22 @@ export function AdminLayout() {
   const token = useAdminStore((s) => s.token);
   const storageReady = usePersistHydrated(useAdminStore);
 
+  useLayoutEffect(() => {
+    if (storageReady) setAdminApiToken(token || null);
+  }, [storageReady, token]);
+
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+      navigate("/admin/login", { replace: true, state: { from: location } });
+    };
+    window.addEventListener(ADMIN_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(ADMIN_UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [location, logout, navigate]);
 
   if (!storageReady) {
     return (

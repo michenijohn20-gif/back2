@@ -280,7 +280,7 @@ export function ProductListPage({ mode = "catalog" }) {
             })
           }
         />
-        Show in-stock units only
+        Available to order only
       </label>
 
       <Btn
@@ -349,7 +349,7 @@ export function ProductListPage({ mode = "catalog" }) {
         </aside>
         <div className="flex-1 space-y-4">
           {loading ? (
-            <ProductGridSkeleton cols={mode === "search" ? 3 : 4} />
+            <ProductGridSkeleton cols={mode === "search" ? 3 : 4} label="Loading products..." />
           ) : data.products.length === 0 ? (
             <div className="border border-dashed border-border rounded p-12 text-center text-muted">
               No refurbished units match right now — adjust filters or check back shortly.

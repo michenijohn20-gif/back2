@@ -64,9 +64,15 @@ export function HomePage() {
         ]);
         if (cancelled) return;
         let products = fp.data?.products || [];
-        if (products.length === 0) {
+        if (products.length < 3) {
           const fb = await api.get("/api/products", { params: { pageSize: 8, sort: "newest" } });
-          if (!cancelled) products = fb.data?.products || [];
+          if (!cancelled) {
+            const seen = new Set(products.map((product) => product.id));
+            products = [
+              ...products,
+              ...(fb.data?.products || []).filter((product) => !seen.has(product.id)),
+            ];
+          }
         }
         setFeatured(products);
         setCats(cg.data || []);
@@ -114,11 +120,11 @@ export function HomePage() {
           </div>
           <div className="w-full">
             {!loading && featured.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.82fr)] gap-3 items-start">
                 <div className="col-span-2 sm:col-span-1">
                   <ProductCard product={featured[0]} dense />
                 </div>
-                <div className="grid gap-3">
+                <div className="grid gap-3 content-start">
                   {featured.slice(1, 3).map((p) => (
                     <Link
                       key={p.id}
@@ -141,9 +147,15 @@ export function HomePage() {
                   ))}
                   <Link
                     to="/products"
-                    className="rounded border border-dashed border-border bg-surface px-4 py-5 text-sm font-semibold text-ink hover:border-primary transition"
+                    className="rounded border border-border bg-surface px-4 py-4 text-sm text-body hover:border-primary transition"
                   >
-                    See every available refurb unit
+                    <span className="block text-xs font-semibold uppercase tracking-wide text-primary">
+                      Need another model?
+                    </span>
+                    <span className="mt-1 block font-semibold text-ink">Browse the full catalogue</span>
+                    <span className="mt-1 block text-xs text-muted">
+                      Phones, laptops, tablets, audio, gaming, cameras, and accessories.
+                    </span>
                   </Link>
                 </div>
               </div>
@@ -156,7 +168,7 @@ export function HomePage() {
               </div>
             ) : (
               <div className="min-h-72 flex items-center justify-center border border-border rounded bg-surface text-muted">
-                Loading...
+                Loading featured products...
               </div>
             )}
           </div>
@@ -218,7 +230,7 @@ export function HomePage() {
             </Link>
           </div>
           {loading ? (
-            <ProductGridSkeleton cols={4} />
+            <ProductGridSkeleton cols={4} label="Loading featured products..." />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
               {featured.slice(0, 8).map((p) => (

@@ -31,14 +31,12 @@ export function ProductCard({
   const [wishlisted, setWishlisted] = useState(Boolean(product.isWishlisted));
   const [wishBusy, setWishBusy] = useState(false);
 
-  const displayPrice =
-    typeof product.displayPrice === "number" && product.displayPrice > 0
-      ? product.displayPrice
-      : pickDisplayPrice(product);
-
+  const preferredCondition = normalizeCondition(condition);
+  const preferredOption = pickConditionOption(product, preferredCondition);
   const cheapestOption = pickCheapestOption(product);
-  const defaultVariant = cheapestOption?.variant || product.variants?.[0];
-  const itemCondition = product.displayCondition || cheapestOption?.condition || condition;
+  const selectedOption = preferredOption || cheapestOption;
+  const defaultVariant = selectedOption?.variant || product.variants?.[0];
+  const itemCondition = selectedOption?.condition || preferredCondition;
 
   const spec =
     product.specLine ||
@@ -89,7 +87,12 @@ export function ProductCard({
     });
   };
 
-  const price = typeof displayPrice === "number" && displayPrice > 0 ? displayPrice : unit;
+  const price =
+    typeof selectedOption?.price === "number" && selectedOption.price > 0
+      ? selectedOption.price
+      : unit > 0
+        ? unit
+        : pickDisplayPrice(product);
 
   const handleImgFallback = (e) => {
     e.currentTarget.onerror = null;
@@ -153,6 +156,28 @@ export function ProductCard({
 
 function pickDisplayPrice(product) {
   return pickCheapestOption(product)?.price || 0;
+}
+
+function normalizeCondition(condition) {
+  const c = String(condition || "EXCELLENT").toUpperCase();
+  return ["EXCELLENT", "GOOD", "FAIR"].includes(c) ? c : "EXCELLENT";
+}
+
+function pickConditionOption(product, condition) {
+  const c = normalizeCondition(condition);
+  const options = (product.variants || [])
+    .map((variant) => ({
+      variant,
+      condition: c,
+      price: priceFor(variant, c),
+      stock: stockFor(variant, c),
+    }))
+    .filter((option) => option.price > 0);
+  return (
+    options
+      .filter((option) => option.stock > 0)
+      .sort((a, b) => a.price - b.price)[0] || options.sort((a, b) => a.price - b.price)[0]
+  );
 }
 
 function pickCheapestOption(product) {

@@ -71,6 +71,7 @@ export function ProductDetailPage() {
       : condition === "FAIR"
         ? variant?.stockFair
         : variant?.stockExcellent;
+  const availableToOrder = Number(stock) > 0;
 
   const helmetTitle = detail?.product?.metaTitle || `${detail?.product?.name} — RefurbKE`;
   const helmetDesc =
@@ -272,18 +273,18 @@ export function ProductDetailPage() {
               </div>
             )}
             <div className="flex items-center gap-2 text-sm">
-              <span className={`font-semibold ${stock > 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {stock > 0 ? `${stock} in stock` : "Out of stock in this grade"}
+              <span className={`font-semibold ${availableToOrder ? "text-emerald-600" : "text-red-600"}`}>
+                {availableToOrder ? "Available to order" : "Currently unavailable in this grade"}
               </span>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Btn className="px-6 py-3" disabled={!stock} onClick={addToCart}>
+              <Btn className="px-6 py-3" disabled={!availableToOrder} onClick={addToCart}>
                 Add to Cart
               </Btn>
               <Btn
                 variant="secondary"
                 className="px-6 py-3"
-                disabled={!stock}
+                disabled={!availableToOrder}
                 onClick={() => {
                   addToCart();
                   navigate("/checkout");
@@ -293,8 +294,8 @@ export function ProductDetailPage() {
               </Btn>
             </div>
             <p className="text-sm text-muted border border-dashed border-border rounded p-3 bg-surface">
-              Usually ships within 5–9 business days anywhere in Kenya after payment clears via M-Pesa or
-              card.
+              Usually ships within 5-9 business days anywhere in Kenya after we source, inspect, and clear your
+              order.
             </p>
             <div className="flex flex-wrap gap-3 text-sm text-body border border-border rounded p-4 bg-white">
               <span>Verified refurbished</span>
